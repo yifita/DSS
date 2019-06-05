@@ -1,0 +1,87 @@
+{
+    "name": "sphere",
+    "ambient-light-color": [
+        0.1,
+        0.1,
+        0.1
+    ],
+    "lights": [
+        {
+            "type": "sun",
+            "color": [
+                0.9,
+                0,
+                0
+            ],
+            "direction": [
+                -1.0,
+                -1.0,
+                -1.0
+            ]
+        },
+        {
+            "type": "sun",
+            "color": [
+                0.0,
+                0.9,
+                0
+            ],
+            "direction": [
+                1.0,
+                -1.0,
+                -1.0
+            ]
+        },
+        {
+            "type": "sun",
+            "color": [
+                0.0,
+                0.0,
+                0.9
+            ],
+            "direction": [
+                0.0,
+                1.0,
+                -1.0
+            ]
+        }
+    ],
+    "cameras": [
+        {
+            "type": "pinhole",
+            "near": 0.01,
+            "far": 1000000,
+            "width": 256,
+            "height": 256,
+            "focalLength": 15,
+            "principlePoint": [
+                0,
+                0
+            ],
+            "lookAt": {
+                "from": [
+                    0,
+                    0,
+                    18
+                ],
+                "to": [
+                    0,
+                    0,
+                    0
+                ],
+                "up": [
+                    0,
+                    1,
+                    0
+                ]
+            }
+        }
+    ],
+    "cloud": {
+        "shading": "diffuse",
+        "backfaceCulling": true,
+        "splatRadius": 1.2,
+        "scale": 1.5,
+        "points": "../pointclouds/cube_20k.ply"
+    }
+}

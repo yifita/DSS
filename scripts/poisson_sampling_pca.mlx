@@ -1,0 +1,24 @@
+<!DOCTYPE FilterScript>
+<FilterScript>
+ <filter name="Poisson-disk Sampling">
+  <Param type="RichInt" tooltip="The desired number of samples. The ray of the disk is calculated according to the sampling density." value="20000" description="Number of samples" name="SampleNum"/>
+  <Param type="RichAbsPerc" tooltip="If not zero this parameter override the previous parameter to allow exact radius specification" value="0" min="0" max="1.00019" description="Explicit Radius" name="Radius"/>
+  <Param type="RichInt" tooltip="The over-sampling rate that is used to generate the intial Montecarlo samples (e.g. if this parameter is &lt;i>K&lt;/i> means that&lt;i>K&lt;/i> x &lt;i>poisson sample&lt;/i> points will be used). The generated Poisson-disk samples are a subset of these initial Montecarlo samples. Larger this number slows the process but make it a bit more accurate." value="20" description="MonterCarlo OverSampling" name="MontecarloRate"/>
+  <Param type="RichBool" tooltip="If true, it will generate an additional Layer with the montecarlo sampling that was pruned to build the poisson distribution." value="false" description="Save Montecarlo" name="SaveMontecarlo"/>
+  <Param type="RichBool" tooltip="If true Poisson Disc distances are computed using an approximate geodesic distance, e.g. an euclidean distance weighted by a function of the difference between the normals of the two points." value="false" description="Approximate Geodesic Distance" name="ApproximateGeodesicDistance"/>
+  <Param type="RichBool" tooltip="If true the original vertices of the base mesh are used as base set of points. In this case the SampleNum should be obviously much smaller than the original vertex number.&lt;br>Note that this option is very useful in the case you want to subsample a dense point cloud." value="false" description="Base Mesh Subsampling" name="Subsample"/>
+  <Param type="RichBool" tooltip="If true the vertices of the below mesh are used as starting vertices, and they will utterly refined by adding more and more points until possible. " value="false" description="Refine Existing Samples" name="RefineFlag"/>
+  <Param type="RichMesh" tooltip="Used only if the above option is checked. " value="0" description="Samples to be refined" name="RefineMesh"/>
+  <Param type="RichBool" tooltip="If true it will use a simple heuristic for choosing the samples. At a small cost (it can slow a bit the process) it usually improve the maximality of the generated sampling. " value="true" description="Best Sample Heuristic" name="BestSampleFlag"/>
+  <Param type="RichInt" tooltip="Used only if the Best Sample Flag is true. It control the number of attempt that it makes to get the best sample. It is reasonable that it is smaller than the Montecarlo oversampling factor." value="10" description="Best Sample Pool Size" name="BestSamplePool"/>
+  <Param type="RichBool" tooltip="If requested it will try to do a dicotomic search for the best poisson disk radius that will generate the requested number of samples with a tolerance of the 0.5%. Obviously it takes much longer." value="true" description="Exact number of samples" name="ExactNumFlag"/>
+  <Param type="RichFloat" tooltip="The radius of the disk is allowed to vary between r and r*var. If this parameter is 1 the sampling is the same of the Poisson Disk Sampling" value="1" description="Radius Variance" name="RadiusVariance"/>
+ </filter>
+ <filter name="Delete Current Mesh"/>
+ <filter name="Compute normals for point sets">
+  <Param type="RichInt" tooltip="The number of neighbors used to estimate normals." value="20" description="Neighbour num" name="K"/>
+  <Param type="RichInt" tooltip="The number of smoothing iteration done on the p used to estimate and propagate normals." value="0" description="Smooth Iteration" name="smoothIter"/>
+  <Param type="RichBool" tooltip="If the 'viewpoint' (i.e. scanner position) is known, it can be used to disambiguate normals orientation, so that all the normals will be oriented in the same direction." value="false" description="Flip normals w.r.t. viewpoint" name="flipFlag"/>
+  <Param y="0" x="0" type="RichPoint3f" tooltip="The viewpoint position can be set by hand (i.e. getting the current viewpoint) or it can be retrieved from mesh camera, if the viewpoint position is stored there." description="Viewpoint Pos." name="viewPos" z="0"/>
+ </filter>
+</FilterScript>
