@@ -9,7 +9,7 @@ conda create --name DSS --file requirements.txt
 
 python setup.py install
 cd ..
-python setup install # or python setup develop for local compilation
+python setup.py install # or python setup develop for local compilation
 
 # downloads
 cd trained_models
