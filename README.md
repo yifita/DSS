@@ -1,20 +1,36 @@
 ## DSS: Differentiable Surface Splatting
+![bunny](images/teaser.png)
 
 ### Demo
+1. clone
 ````bash
 git clone --recursive 
-
-cd pytorch_points
+cd DSS
+````
+2. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
+````bash
+# update conda
+conda update -n base -c defaults conda
+# install requirements
+conda config --add channels pytorch
+conda config --add channels conda-forge
 conda create --name DSS --file requirements.txt
-
+````
+3. compile cuda library
+````bash
+cd pytorch_points
 python setup.py install
 cd ..
 python setup.py install # or python setup develop for local compilation
-
+````
+4. download data
+````bash
 # downloads
 cd trained_models
 ./download_data.sh
-
+````
+5. experiments
+````bash
 # inverse rendering test: optimize point positions and normals to transform sphere to teapot
 python learn_shape_from_target.py example_data/scenes/sphere.json -t example_data/scenes/teapot.json
 
