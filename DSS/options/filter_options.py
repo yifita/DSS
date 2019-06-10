@@ -21,10 +21,6 @@ class FilterOptions(BaseOptions):
                             help="model name for pix2pix")
         parser.add_argument('--recursiveFiltering', action="store_true",
                             help="apply the same filter on the output")
-        parser.add_argument('-aW', '--averageWeight', type=float,
-                            default=0.01, help='weight for average term')
-        parser.add_argument('--average-term', action="store_true",
-                            help="apply average term")
         parser.add_argument('--cloud', nargs='?', help='source cloud')
         parser.add_argument('--im_filter', '-f', default="Pix2PixDenoising", help='filter function')
 
@@ -32,6 +28,7 @@ class FilterOptions(BaseOptions):
                             2000, 1], projectionRadius=0.1, projectionWeight=0.05,
                             repulsionRadius=0.03, repulsionWeight=0.05,
                             repulsionFreq=1, projectionFreq=1,
+                            averageWeight=0.01,
                             camOffset=10, camFocalLength=15, name="filter",
                             backward_bb=100)
         self.initialized = True

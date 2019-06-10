@@ -2,7 +2,6 @@
 # $ conda create --name <env> --file <this file>
 # platform: linux-64
 anaconda=custom=py37_0
-cuda92=1.0=0
 faiss-gpu=1.5.2
 imageio=2.5.0=py37_0
 jsonschema=3.0.1=py37_0

@@ -53,6 +53,10 @@ class BaseOptions():
                             default=0.3, help='radius for projection loss')
         parser.add_argument('-pW', '--projectionWeight', type=float,
                             default=0.05, help='weight for projection loss')
+        parser.add_argument('-aW', '--averageWeight', type=float,
+                            default=0, help='weight for average term')
+        parser.add_argument('--average-term', action="store_true",
+                            help="apply average term")
         parser.add_argument('-iW', '--imageWeight', type=float,
                             default=1, help='weight for projection loss')
         parser.add_argument('-fR', '--repulsionFreq', type=int,

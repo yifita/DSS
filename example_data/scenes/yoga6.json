@@ -5,7 +5,7 @@
         "source": "example_data/scenes/cube_20k.json",
         "cycles": 14,
         "cutOffThreshold": 1.2,
-        "backwardLocalSize": 160,
+        "backwardLocalSize": 128,
         "backwardLocalSizeDecay": 0.95,
         "projectionRadius": 0.3,
         "projectionWeight": 0.05,
@@ -28,7 +28,7 @@
             "far": 1000000,
             "width": 256,
             "height": 256,
-            "focalLength": 15,
+            "focalLength": 9,
             "principlePoint": [
                 0,
                 0
