@@ -1,0 +1,3 @@
+[submodule "pytorch_points"]
+	path = pytorch_points
+	url = https://github.com/yifita/pytorch_points
