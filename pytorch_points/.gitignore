@@ -1,8 +1,0 @@
-*.pyc
-*.o
-*.egg
-*.egg-info/
-build
-.mypy_cache/
-.vscode
-
