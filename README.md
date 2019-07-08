@@ -1,4 +1,4 @@
-## DSS: Differentiable Surface Splatting
+## DSS: Differentiable Surface Splatting ([Arxiv](https://arxiv.org/abs/1906.04173))
 ![bunny](images/teaser.png)
 
 ### installation
