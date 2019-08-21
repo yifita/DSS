@@ -31,6 +31,11 @@ python setup.py develop
 ### Demos
 
 #### inverse rendering - shape deformation
+##### 2D grid to teapot
+```bash
+python learn_shape_from_target.py -t example_data/scenes/good_teapot.json
+```
+![teapot_2D](images/2D_teapot.gif)
 ##### sphere to teapot
 ````bash
 # inverse rendering test: optimize point positions and normals to transform sphere to teapot
