@@ -9,10 +9,6 @@ class PointCloud:
         self.color = torch.tensor([], device=self.device)
         # options: albedo, normal, diffuse
         self.shading = "normal"
-        self.cutoffThreshold = 1.0
-        self.boundingBoxCutoffThresholdMultiplier = 1
-        self.boundingBoxExtraMargin = 1
-        self.backwardBoundingBoxMargin = 50
         self.backfaceCulling = True
         self.position = torch.zeros([3], device=self.device)
         self.rotation = torch.eye(3, device=self.device)
@@ -20,8 +16,6 @@ class PointCloud:
         # options: nearestNeighbor, constant
         self.VrkMode = "constant"
         # we can assume that the sampling pattern in the local planar area around u_k is a jittered grid with sidelength h in object space.
-        self.Vrk_h = 0.02
-        # used to compute Vrk_h
         self.Vrk_nn_k = 6
         # Context variables, don't touch, splatter overwrites this
         # cameraPoints: nx4 matrix of homogeneous coordinates in the camera frame
@@ -30,15 +24,10 @@ class PointCloud:
         self.cameraNormals = None
         # points projected to camera plane
         self.projPoints = None
-        # x0/x1 in camera plane: x0 is the vector from p_k to p_k moved by one pixel along the x axis -> movement of one pixels distance
-        self.projX0 = None
-        self.projX1 = None
         # absolute dot product of point k and camera normal k
         self.normalAngle = None
         # vector tilde x0/x1 in normal plane from projection of x0/x1, relative but not normalized
         # = movement vector corresponding to the distance between two pixels
-        self.x0plane = None
-        self.x1plane = None
 
     def model2WorldMatrix(self):
         """

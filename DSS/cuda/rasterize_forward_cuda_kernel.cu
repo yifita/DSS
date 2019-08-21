@@ -218,7 +218,7 @@ void compute_visiblity_maps_cuda(const at::Tensor &boundingBoxes,
   n_blocks = min(32, (numPixels * batchSize + n_threads - 1) / n_threads);
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-      inPlane.type(), "compute_visiblity_maps_kernel", ([&] {
+      inPlane.scalar_type(), "compute_visiblity_maps_kernel", ([&] {
         compute_visiblity_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, numPoint, imgWidth, imgHeight, bbWidth, bbHeight,
@@ -259,7 +259,7 @@ at::Tensor gather_maps_cuda(const at::Tensor &data, const at::Tensor &indices,
   // n_blocks,
   //        n_threads);
   AT_DISPATCH_ALL_TYPES(
-      data.type(), "gather_maps_kernel", ([&] {
+      data.scalar_type(), "gather_maps_kernel", ([&] {
         gather_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, numPoint, imgWidth, imgHeight, topK, channels,
@@ -292,7 +292,7 @@ at::Tensor scatter_maps_cuda(const int64_t numPoint, const at::Tensor &src,
   auto dataGrad = at::zeros({batchSize, nP, channels}, src.options());
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   AT_DISPATCH_ALL_TYPES(
-      src.type(), "scatter_maps_kernel", ([&] {
+      src.scalar_type(), "scatter_maps_kernel", ([&] {
         scatter_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, nP, imgWidth, imgHeight, topK, channels,
@@ -329,7 +329,7 @@ at::Tensor guided_scatter_maps_cuda(const int64_t numPoint,
   auto dataGrad = at::zeros({batchSize, nP, channels}, src.options());
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   AT_DISPATCH_ALL_TYPES(
-      src.type(), "guided_scatter_maps_kernel", ([&] {
+      src.scalar_type(), "guided_scatter_maps_kernel", ([&] {
         guided_scatter_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, nP, imgWidth, imgHeight, topK, channels,

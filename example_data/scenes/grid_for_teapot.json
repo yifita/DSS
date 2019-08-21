@@ -54,6 +54,7 @@
         "shading": "albedo",
         "backfaceCulling": true,
         "scale": 1,
+        "color": [0,0,0.9],
         "position": [
             -0.5,
             -0.5,

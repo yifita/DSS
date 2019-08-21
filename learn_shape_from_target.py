@@ -7,6 +7,7 @@ import time
 from DSS.utils.splatterIo import readScene, saveAsPng, writeScene, writeCameras
 from DSS.utils.trainer import Trainer
 from DSS.options.deformation_options import DeformationOptions
+from DSS.core.renderer import saved_variables as tmp_saved_v
 
 
 def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
@@ -22,6 +23,7 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
     lossTime = 0.0
     optimizerStep = 0.0
 
+    log_variables = {}
     with open(expr_dir + "/loss.csv", 'w') as loss_log:
         for c in range(opt.cycles):
             # creat new reference
@@ -31,24 +33,40 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
             with torch.no_grad():
                 trainer.create_reference(refScene)
                 if not benchmark:
-                    writeScene(refScene, os.path.join(expr_dir, 't%03d_scene_gt.json' % t))
-                    writeCameras(refScene, os.path.join(expr_dir, 't%03d_cameras.ply' % t))
+                    writeScene(refScene, os.path.join(
+                        expr_dir, 't%03d_scene_gt.json' % t))
+                    writeCameras(refScene, os.path.join(
+                        expr_dir, 't%03d_cameras.ply' % t))
                     for i, gt in enumerate(trainer.groundtruths):
-                        saveAsPng(gt.cpu()[0], os.path.join(expr_dir, 't%03d_cam%d_gt.png' % (t, i)))
+                        saveAsPng(gt.cpu()[0], os.path.join(
+                            expr_dir, 't%03d_cam%d_gt.png' % (t, i)))
                 trainer.initiate_cycle()
 
             for t in range(tb, te):
                 if t % logInterval == 0 and not benchmark:
-                    writeScene(scene, os.path.join(expr_dir, 't%03d_scene.json' % t), os.path.join(expr_dir, "t%03d.ply" % t))
+                    writeScene(scene, os.path.join(
+                        expr_dir, 't%03d_scene.json' % t), os.path.join(expr_dir, "t%03d.ply" % t))
 
                 trainer.optimize_parameters()
+                for k in tmp_saved_v:
+                    if k == "renderable_idx":
+                        continue
+                    if k not in log_variables:
+                        log_variables[k] = tmp_saved_v[k].detach().numpy()
+                    else:
+                        log_variables[k] = np.concatenate(
+                            [log_variables[k], tmp_saved_v[k].detach().numpy()], axis=0)
+
+
 
                 if t % logInterval == 0 and not benchmark:
                     for i, prediction in enumerate(trainer.predictions):
-                        saveAsPng(prediction.detach().cpu()[0], os.path.join(expr_dir, 't%03d_cam%d' % (t, i) + ".png"))
+                        saveAsPng(prediction.detach().cpu()[0], os.path.join(
+                            expr_dir, 't%03d_cam%d' % (t, i) + ".png"))
 
                 if not benchmark:
-                    loss_str = ",".join(["%.3f" % v for v in trainer.loss_image])
+                    loss_str = ",".join(
+                        ["%.3f" % v for v in trainer.loss_image])
                     reg_str = ",".join(["%.3f" % v for v in trainer.loss_reg])
                     entries = [trainer.modifier] + [loss_str] + [reg_str]
                     loss_log.write(",".join(entries)+"\n")
@@ -57,7 +75,9 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
 
             trainer.finish_cycle()
 
-    writeScene(scene, os.path.join(expr_dir, 'final_scene.json'), os.path.join(expr_dir, 'final_cloud.ply'))
+    writeScene(scene, os.path.join(expr_dir, 'final_scene.json'),
+               os.path.join(expr_dir, 'final_cloud.ply'))
+    np.save(os.path.join(expr_dir, "log_variables"), log_variables)
 
 
 if __name__ == "__main__":
@@ -72,8 +92,6 @@ if __name__ == "__main__":
     # load scenes
     refScene = readScene(opt.ref, device="cpu")
     scene = readScene(opt.source, device="cpu")
-    if opt.baseline:
-        refScene.cloud.shading = scene.cloud.shading = "depth"
 
     scene.cloud.shading = refScene.cloud.shading
     scene.pointlightPositions = refScene.pointlightPositions
@@ -82,4 +100,5 @@ if __name__ == "__main__":
     scene.sunColors = refScene.sunColors
     scene.ambientLight = refScene.ambientLight
 
-    trainShapeOnImage(scene, refScene, opt, baseline=opt.baseline, benchmark=opt.benchmark)
+    trainShapeOnImage(scene, refScene, opt,
+                      baseline=opt.baseline, benchmark=opt.benchmark)

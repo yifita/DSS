@@ -1,7 +1,6 @@
 import torch
 import os
 import argparse
-import time
 import numpy as np
 from itertools import chain
 from glob import glob
@@ -30,7 +29,7 @@ if __name__ == "__main__":
 
     if opt.genCamera > 0:
         camSampler = CameraSampler(opt.genCamera, opt.camOffset, opt.camFocalLength, points=scene.cloud.localPoints,
-                                   camWidth=opt.width, camHeight=opt.height, filename="../example_data/pointclouds/sphere_300.ply")
+                                   camWidth=opt.width, camHeight=opt.height, filename="example_data/pointclouds/sphere_300.ply")
     with torch.no_grad():
         splatter = createSplatter(opt, scene=scene)
 
@@ -51,8 +50,6 @@ if __name__ == "__main__":
 
         for pointPath, pointRelPath in zip(points_paths, points_relpaths):
             keyName = os.path.join(os.path.join(opt.output, pointRelPath[:-4]))
-            readSceneTick = time.time()
-            readSceneTock = time.time()
             points = readCloud(pointPath, device="cpu")
             scene.loadPoints(points)
             fileName = getBasename(pointPath)

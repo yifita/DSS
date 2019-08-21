@@ -54,7 +54,7 @@ def removeOutlier(gtImage, projPoints, sigma=50):
     treat gt image as 2D points, compare nn distance between projPoints with gt points
     return inlier confidence
     input:
-        gtImages list of (1, H, W, C)    
+        gtImages list of (1, H, W, C)
         projPoints (1, N, 2or3)
     """
     gtImage = gtImage.to(device=projPoints.device)

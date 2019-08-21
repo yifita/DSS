@@ -4,22 +4,22 @@
 		"source": "example_data/scenes/grid_for_teapot.json",
 		"considerZ": false,
 		"genCamera": 0,
-		"cutOffThreshold": 0.5,
+		"cutOffThreshold": 2e-6,
+		"Vrk_h": 10,
 		"cycles": 1,
 		"projectionFreq": -1,
 		"learningRates": [
-			1
+			5
 		],
 		"repulsionFreq": 1,
-		"repulsionRadius": 0.03,
+		"repulsionRadius": 0.01,
 		"repulsionWeight": 0.05,
 		"steps": [
-			200
+			100
 		],
 		"modifiers": [
 			"localPoints"
-		],
-		"backwardLocalSize": 196
+		]
 	},
 	"lights": [
 		{
@@ -69,6 +69,7 @@
 	],
 	"cloud": {
 		"shading": "albedo",
-		"points": "../pointclouds/teapot_clean.ply"
+		"points": "../pointclouds/teapot_clean.ply",
+		"color": [0, 0, 0.9]
 	}
 }

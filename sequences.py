@@ -26,9 +26,8 @@ def rotMatrix(axis):
 
 if __name__ == "__main__":
     opt = RenderOptions().parse()
-
     points_paths = list(chain.from_iterable(glob(p) for p in opt.points))
-    assert(len(points_paths) > 0), "Found no point clouds in with path {}".format(points_paths)
+    assert(len(points_paths) > 0), "Found no point clouds with path {}".format(points_paths)
     points_relpaths = None
     if len(points_paths) > 1:
         points_dir = os.path.commonpath(points_paths)
@@ -50,6 +49,7 @@ if __name__ == "__main__":
         for i in range(len(scene.cameras)):
             scene.cameras[i].width = opt.width
             scene.cameras[i].height = opt.height
+            # scene.cameras[i].focalLength = opt.camFocalLength
 
         splatter.initCameras(cameras=scene.cameras)
 

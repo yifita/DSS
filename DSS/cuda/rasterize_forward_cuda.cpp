@@ -81,8 +81,8 @@ void compute_visibility_maps(const at::Tensor &boundingBoxes,
 PYBIND11_MODULE(rasterize_forward, m) {
   // module docstring
   m.doc() = "pybind11 compute_visibility_maps plugin";
-  m.def("compute_visibility_maps", &compute_visibility_maps, "");
-  m.def("gather_maps", &gather_maps, "");
-  m.def("scatter_maps", &scatter_maps, "");
-  m.def("guided_scatter_maps", &guided_scatter_maps, "");
+  m.def("_compute_visibility_maps", &compute_visibility_maps, "");
+  m.def("_gather_maps", &gather_maps, "");
+  m.def("_scatter_maps", &scatter_maps, "");
+  m.def("_guided_scatter_maps", &guided_scatter_maps, "");
 }

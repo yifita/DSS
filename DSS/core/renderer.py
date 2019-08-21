@@ -6,8 +6,7 @@ from pytorch_points.network import operations
 from pytorch_points.utils.pc_utils import save_ply, read_ply
 from ..utils.mathHelper import dot, div, mul, det22, normalize, mm, inverse22, inverse33
 from ..utils.matrixConstruction import convertWorldToCameraTransform, batchLookAt, batchAffineMatrix
-from ..cuda import rasterize_forward
-from ..cuda import rasterize_backward
+from ..cuda import rasterizeDSS, rasterizeRBF, guided_scatter_maps
 from .scene import Scene
 
 
@@ -99,7 +98,7 @@ def _findSplatBoundingBox(cutoffC, projPoint, IMAGE_WIDTH, IMAGE_HEIGHT, ellipse
     Compute the bounding box around each projected points given the elliptical parameters ax^2 + by^2 + cxy <= cutoffC
     input:
         cutoffC         scalar
-        projPoint       BxNx2 
+        projPoint       BxNx2
         ellipseParams   BxNx3 coefficients a, b, c of the elliptical function
         image_width     scalar
         image_height    scalar
@@ -112,6 +111,7 @@ def _findSplatBoundingBox(cutoffC, projPoint, IMAGE_WIDTH, IMAGE_HEIGHT, ellipse
     # BxN
     (xE, yE) = _findEllipseBoundingBox(a, b, c, cutoffC)
     if projPoint.requires_grad:
+        # backward memory constraint
         xE = torch.min(xE, torch.full((1, 1), 15, dtype=xE.dtype, device=xE.device))
         yE = torch.min(yE, torch.full((1, 1), 15, dtype=xE.dtype, device=xE.device))
     xmin = x - xE
@@ -130,7 +130,7 @@ class NormalLengthLoss(nn.Module):
     def __init__(self):
         super(NormalLengthLoss, self).__init__()
         self.criterion = torch.nn.MSELoss(reduction='mean')
-    
+
     def forward(self, normals):
         squaredNorm = torch.sum(normals**2, dim=-1)
         return self.criterion(squaredNorm, torch.ones_like(squaredNorm))
@@ -149,150 +149,6 @@ class SmapeLoss(nn.Module):
         y label (N,3)
         """
         return torch.mean(torch.abs(x-y)/(torch.abs(x)+torch.abs(y)+1e-2))
-class RasterizeAutograd(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, rho, rhoValues, Ws, projPoints, boundingBoxes, inplane, cameraPoints,
-                width, height, localWidth, localHeight, camFar, focalLength, mergeThreshold, considerZ, topK):
-        """
-        input:
-            rho            BxNxhxw
-            Ws             BxNx3
-            projPoints     BxNx2or3
-            cameraPoints   BxNx3or4
-            boundingBoxes  BxNx4
-            inplane        BxNxhxwx3
-        returns:
-            pixels         BxHxWx3
-            pointIdxMap    BxHxWx5
-            rhoMap         BxHxWx5
-            WsMap          BxHxWx5x3
-            isBehind       BxHxWx5
-        """
-        batchSize, numPoints, bbHeight, bbWidth = rho.shape
-        # compute visiblity, return per pixel top5 contributor sorted by their
-        # depthValue
-        # pointIdxMap BxHxWx5
-        # depthMap    BxHxWx5
-        # rhoMap      BxHxWx5
-        pointIdxMap = torch.full((batchSize, height, width, topK), -1, dtype=torch.int64, device=rho.device)
-        depthMap = torch.full((batchSize, height, width, topK), camFar, dtype=rho.dtype, device=rho.device)
-        bbPositionMap = torch.full((batchSize, height, width, topK, 2), -1, dtype=torch.int64, device=rho.device)
-        with torch.cuda.device(rho.device):
-            # call visibility kernel, outputs depthMap, pointIdxMap which store the depth and index of
-            # the 5 closest point for each pixel, if less than 5 points paint the pixel, set idxMap to -1
-            rasterize_forward.compute_visibility_maps(boundingBoxes[:, :, :2].contiguous(), inplane, pointIdxMap, bbPositionMap, depthMap)
-            # gather rho, wk
-            WsMap = rasterize_forward.gather_maps(Ws, pointIdxMap, 0.0)
-            # per batch indice for rhos bx(Nxhxw)
-            # gather rho, Ws values from pointIdxMap and bbPositionMap, if idx < 0 (unset), then set rho=0 Ws=0
-            totalIdxMap = pointIdxMap*bbHeight*bbWidth+bbPositionMap[:, :, :, :, 0]*bbWidth+bbPositionMap[:, :, :, :, 1]
-            validMaps = totalIdxMap >= 0
-            totalIdxMap = torch.where(validMaps, totalIdxMap, torch.full_like(totalIdxMap, -1))
-            rhoMap = rasterize_forward.gather_maps(rho.reshape(batchSize, -1, 1), totalIdxMap, 0.0).squeeze(-1)
-            # check depth jump
-            isBehind = torch.zeros(depthMap.shape, dtype=torch.uint8, device=depthMap.device)
-            isBehind[:, :, :, 1:] = (depthMap[:, :, :, 1:]-depthMap[:, :, :, :1]) > mergeThreshold
-            rhoMap_filtered = torch.where(isBehind, torch.zeros(1, 1, 1, 1, device=rhoMap.device, dtype=rhoMap.dtype), rhoMap)
-            # WsMap[:, :, :, 1:, :] = torch.where(isBehind.unsqueeze(-1), torch.zeros(1, 1, 1, 1, 1, device=WsMap.device, dtype=WsMap.dtype), WsMap[:, :, :, 1:])
-            # normalize rho
-            sumRho = torch.sum(rhoMap_filtered, dim=-1, keepdim=True)
-            rhoMap_normalized = rhoMap_filtered/(sumRho+1e-8)
-            # rho * w
-            pixels = torch.sum(WsMap * rhoMap_normalized.unsqueeze(-1), dim=3)
-            # accumulated = WsMap[:, :, :, 0, :]
-            ctx.save_for_backward(pointIdxMap, isBehind, WsMap, rhoMap, depthMap, Ws, rhoValues, projPoints, cameraPoints, boundingBoxes, pixels)
-            ctx.numPoint = numPoints
-            ctx.bbWidth = bbWidth
-            ctx.bbHeight = bbHeight
-            ctx.localHeight = localHeight
-            ctx.localWidth = localWidth
-            ctx.mergeThreshold = mergeThreshold
-            ctx.focalLength = focalLength
-            ctx.considerZ = considerZ
-            # ctx.repulsion_radius = repulsion_radius
-            # ctx.repulsion_weight = repulsion_weight
-            ctx.rho_requires_grad = rho.requires_grad
-            ctx.w_requires_grad = Ws.requires_grad
-            ctx.xyz_requires_grad = projPoints.requires_grad
-            ctx.mark_non_differentiable(pointIdxMap, rhoMap, WsMap, isBehind)
-            return pixels, pointIdxMap, rhoMap_normalized, WsMap, isBehind
-
-    @staticmethod
-    def backward(ctx, gradPixels, dpointIdxMap, gradRhoMap, gradWsMap, gradIsBehind):
-        """
-        input
-            gradPixels          (BxHxWx3)
-        output
-            dRho            (BxNxbbHxbbW)
-            dW              (BxNx3)
-        """
-        pointIdxMap, isBehind, WsMap, rhoMap, depthMap, Ws, rhoValues, projPoints, cameraPoints, boundingBoxes, pixels = ctx.saved_tensors
-        mergeThreshold = ctx.mergeThreshold
-        focalLength = ctx.focalLength
-        numPoint = ctx.numPoint
-        considerZ = ctx.considerZ
-        bbWidth = ctx.bbWidth
-        bbHeight = ctx.bbHeight
-        batchSize, height, width, topK, C = WsMap.shape
-        if ctx.needs_input_grad[0]:  # rho will not be backpropagated
-            WsMap_ = WsMap.clone()
-            WsMap_[:, :, :, 1:, :] = torch.where(isBehind.unsqueeze(-1), torch.zeros(1, 1, 1, 1, 1, device=WsMap.device, dtype=WsMap.dtype), WsMap[:, :, :, 1:])
-            totalIdxMap = pointIdxMap*bbHeight*bbWidth+bbPositionMap[:, :, :, :, 0]*bbWidth+bbPositionMap[:, :, :, :, 1]
-            # TODO check dNormalizeddRho
-            dNormalizeddRho = torch.where(rhoMap > 0, 1-rhoMap, rhoMap)
-            dRho = rasterize_forward.guided_scatter_maps(numPoint*bbWidth*bbHeight, dNormalizeddRho.unsqueeze(-1)*gradPixels.unsqueeze(3)*WsMap_, totalIdxMap, boundingBoxes)
-            dRho = torch.sum(dRho, dim=-1)
-            dRho = torch.reshape(dRho, (batchSize, numPoint, bbHeight, bbWidth))
-        else:
-            dRho = None
-        
-        if ctx.needs_input_grad[2]:
-            # dPixels/dWs = Rho
-            rhoMap_filtered = torch.where(isBehind, torch.zeros(1, 1, 1, 1, device=rhoMap.device, dtype=rhoMap.dtype), rhoMap)
-            sumRho = torch.sum(rhoMap_filtered, dim=-1, keepdim=True)
-            rhoMap_normalized = rhoMap_filtered/(sumRho+1e-8)
-            # BxHxWx3 -> BxHxWxKx3 -> BxNx3
-            # TODO: debug guided_scatter_maps
-            # dWs = rasterize_forward.scatter_maps(numPoint, gradPixels.unsqueeze(3)*rhoMap_normalized.unsqueeze(-1), pointIdxMap)
-            dWs = rasterize_forward.guided_scatter_maps(numPoint, gradPixels.unsqueeze(3)*rhoMap_normalized.unsqueeze(-1), pointIdxMap, boundingBoxes)
-            # saved_variables["pointIdxMap"] = pointIdxMap
-            # saved_variables["rhoMap_normalized"] = rhoMap_normalized.cpu()
-            # saved_variables["dWs"] = dWs.cpu()
-            # saved_variables["gradPixels"] = gradPixels.cpu()
-            # print("dWs all zero", torch.all(dWs == 0))
-        else:
-            dWs = None
-
-        if ctx.needs_input_grad[3]:
-            localWidth = ctx.localWidth
-            localHeight = ctx.localHeight
-            depthValues = cameraPoints[:, :, 2].contiguous()
-            # B,N,1
-            dIdp = torch.zeros_like(projPoints, device=gradPixels.device, dtype=gradPixels.dtype)
-            dIdz = torch.zeros(1, numPoint, device=gradPixels.device, dtype=gradPixels.dtype)
-            dIdpMap = torch.zeros(1, height, width, 2, device=gradPixels.device, dtype=gradPixels.dtype)
-            outputs = rasterize_backward.visibility_backward(mergeThreshold, focalLength, considerZ,
-                                                                   localHeight, localWidth,
-                                                                   gradPixels, pointIdxMap, rhoMap, WsMap, depthMap, isBehind,
-                                                                   pixels, boundingBoxes, projPoints, Ws, depthValues, rhoValues, dIdp, dIdz)
-            dIdp, dIdz = outputs
-            dIdcam = torch.zeros_like(cameraPoints)
-            dIdcam[:, :, 2] = dIdz
-        else:
-            dIdp = dIdcam = None
-
-        return (None, None, dWs, dIdp, None, None, dIdcam, None, None, None, None, None, None, None, None, None, None)
-
-def rasterize(rho, rhoValues, Ws, projPoints, boundingBoxes, inplane, cameraPoints,
-              width, height, camFar, focalLength, localWidth=None, localHeight=None, 
-              mergeThreshold=0.05, considerZ=False, topK=5):
-    d = torch.cuda.current_device()
-    localWidth = localWidth or 2*width
-    localHeight = localHeight or 2*height
-    return RasterizeAutograd.apply(rho.to(device=d), rhoValues.to(device=d), Ws.to(device=d), projPoints.to(device=d), boundingBoxes.to(device=d), 
-                                   inplane.to(device=d), cameraPoints.to(device=d),
-                                   width, height, localWidth, localHeight, camFar, focalLength, mergeThreshold, considerZ, topK)
-
 
 def createSplatter(opt, scene=None):
     if opt.type == "DSS":
@@ -321,6 +177,7 @@ class DSS(torch.nn.Module):
         self.average_weight = opt.averageWeight
         self.sharpness_sigma = opt.sharpnessSigma
         self.cutOffThreshold = opt.cutOffThreshold
+        self.Vrk_h = opt.Vrk_h
         self.backwardLocalSize = opt.backwardLocalSize
         self.shading = scene.cloud.shading
         self.device = opt.device
@@ -368,16 +225,16 @@ class DSS(torch.nn.Module):
     def setCloud(self, cloud):
         self.scene.cloud = cloud
         if self.cloudInitialized:
-            self.localPoints.data.set_(cloud.localPoints.unsqueeze(0))
-            self.pointColors.data.set_(cloud.color.unsqueeze(0))
-            self.localNormals.data.set_(cloud.localNormals.unsqueeze(0))
-            self.pointPosition.data.set_(cloud.position.unsqueeze(0))
-            self.pointRotation.data.set_(cloud.rotation.unsqueeze(0))
-            self.pointScale.data.set_(cloud.scale.unsqueeze(0))
+            self.localPoints.set_(cloud.localPoints.unsqueeze(0))
+            self.pointColors.set_(cloud.color.unsqueeze(0))
+            self.localNormals.set_(cloud.localNormals.unsqueeze(0))
+            self.pointPosition.set_(cloud.position.unsqueeze(0))
+            self.pointRotation.set_(cloud.rotation.unsqueeze(0))
+            self.pointScale.set_(cloud.scale.unsqueeze(0))
             pShape = list(self.localPoints.shape)
             pShape[-1] = 1
-            self.nonvisibility.data.resize_(*pShape).zero_()
-            self.renderTimes.data.resize_(*pShape).zero_()
+            self.nonvisibility.resize_(*pShape).zero_()
+            self.renderTimes.resize_(*pShape).zero_()
             self.renderTimes = self.renderTimes.to(device=self.localPoints.device)
             self.cloudInitialized = True
             # Create model to world matrix (4x4)
@@ -406,9 +263,11 @@ class DSS(torch.nn.Module):
     def pointRegularizerLoss(self, points_data, normals_data, nonvisibility_data, idxList=None, include_projection=False, use_density=False):
         if self.repulsion_weight <= 0 and self.projection_weight <= 0:
             return
+        batchSize, PN, _ = points_data.shape
+        if PN <= 3:
+            return
         knn_k = 33
         normals_data = normalize(normals_data)
-        batchSize, PN, _ = points_data.shape
         points = points_data
         normals = normals_data
         nonvisibility_data = nonvisibility_data.to(device=points.device)
@@ -457,7 +316,7 @@ class DSS(torch.nn.Module):
         # BN, k, 3
         _, _, V = operations.batch_svd(var.view(-1, knn_k-1, 3))
         V = V.detach()
-        totalLoss = 0 
+        totalLoss = 0
         ploss = 0
         rloss = 0
         if include_projection and self.projection_weight > 0:
@@ -477,7 +336,7 @@ class DSS(torch.nn.Module):
             ploss = torch.mean(distance2*weight.detach())*self.projection_weight
             loss = torch.where(distance2 > rradius2, torch.zeros_like(ploss), ploss)
             totalLoss += ploss
-            
+
         if self.repulsion_weight > 0:
             # repulsion proj to the first two principle axes, set last column of V to zero
             # BN, 3, 3
@@ -510,7 +369,7 @@ class DSS(torch.nn.Module):
             rloss /= weightSum
             rloss = torch.mean(rloss)*self.repulsion_weight
             totalLoss += rloss
-            
+
         if include_projection:
             return ploss, rloss
         return totalLoss
@@ -527,7 +386,7 @@ class DSS(torch.nn.Module):
             normals = torch.gather(normals_data, 1, idxList.expand(-1, -1, normals_data.shape[-1]))
 
         PN = points.shape[1]
-        
+
         knn_k = 16
         if points.is_cuda:
             knn_points, knn_idx, distance2 = operations.group_knn(knn_k, points, original_points, unique=False, NCHW=False)
@@ -561,6 +420,9 @@ class DSS(torch.nn.Module):
 
     def applyProjection(self, points_data, normals_data, nonvisibility_data, idxList=None, decay=1.0):
         if self.projection_weight <= 0:
+            return
+        batchSize, PN, _ = points_data.shape
+        if PN <= 3:
             return
         normals_data = normalize(normals_data)
         knn_k = 33
@@ -614,7 +476,7 @@ class DSS(torch.nn.Module):
         project_weight_sum = torch.sum(weight, dim=-1, keepdim=True)+1e-10
         # B, N, c
         normal_sum = torch.sum(knn_normals*weight.unsqueeze(-1), dim=2)
-        # saved_variables["denoise_quiver"] = (knn_normals*weight.unsqueeze(-1)).cpu()[0, logIdx]
+
         update_normal = normal_sum/project_weight_sum
         update_normal = normalize(update_normal)
         # too few neighbors or project_weight_sum too small
@@ -649,7 +511,7 @@ class DSS(torch.nn.Module):
         Vrk per point BxNx2x2
         """
         # V_k^r: variance matrices of the basis functions r_k
-        h = self.scene.cloud.Vrk_h
+        h = self.Vrk_h
         Vr = torch.zeros([cameraPoints.size(0), cameraPoints.size(1), 2, 2], device=cameraPoints.device)
         if self.scene.cloud.VrkMode == "constant":
             # for simplicity, let V be constant
@@ -659,7 +521,7 @@ class DSS(torch.nn.Module):
             pts = cameraPoints[:, :, 0:3].detach().contiguous()
             # BxPx6
             _, _, distance = operations.faiss_knn(6, pts, pts, NCHW=False)
-            h = torch.mean(distance, dim=2)            
+            h = torch.mean(distance, dim=2)
             h = h*h
         else:
             print("unknown VrkMode encountered: " + self.scene.cloud.VrkMode)
@@ -702,7 +564,7 @@ class DSS(torch.nn.Module):
 
         if numRenderables.min() == 0:
             return False
-        
+
         uniNumRenderables = numRenderables.max()
         # BxX, used for gather
         filledIndices = torch.zeros((batchSize, uniNumRenderables), device=indices.device, dtype=indices.dtype)
@@ -713,7 +575,7 @@ class DSS(torch.nn.Module):
 
         filledIndices = filledIndices.unsqueeze(-1)
         self.renderable_indices = filledIndices
-        
+
         renderTimes = self.renderTimes.clone()
         renderTimes.zero_().scatter_(1, filledIndices.to(device=renderTimes.device), torch.ones_like(filledIndices, dtype=self.renderTimes.dtype, device=renderTimes.device))
         self.renderTimes  += renderTimes
@@ -847,7 +709,7 @@ class DSS(torch.nn.Module):
                         torch.arange(width,  dtype=projPoints.dtype, device=projPoints.device))
         ygrid = ygrid.unsqueeze(0).expand(batchSize, -1, -1)
         xgrid = xgrid.unsqueeze(0).expand(batchSize, -1, -1)
-        
+
         # B x N x height x width x 2
         pixs = torch.stack([xgrid, ygrid], dim=-1).unsqueeze(1).expand(-1, PN, -1, -1, -1)
         pixs = pixs + boundingBoxes[:, :, :2].unsqueeze(2).unsqueeze(2).to(dtype=pixs.dtype)
@@ -865,13 +727,13 @@ class DSS(torch.nn.Module):
         depths = inplane[:, :, :, :, 2]
         # B x N x H x W
         Gbs = torch.exp(-betas)
-        outofSupport = cutoffThreshold < betas
+        outofSupport = (betas > cutoffThreshold)
         Gbs = torch.where(outofSupport, torch.zeros_like(Gbs), Gbs)
         depths = torch.where(outofSupport, torch.full((1, 1, 1, 1), camFar, dtype=depths.dtype, device=depths.device), depths)
         inplane[:, :, :, :, 2] = depths
         # BxN x H x W
         rhos = Gas.unsqueeze(2).unsqueeze(2) * Gbs
-        return rhos, Gas, boundingBoxes, inplane
+        return rhos, Gas, boundingBoxes, inplane, Ms.contiguous()
 
     def computeUs(self, projPoints, cameraPoints, cameraNormals):
         """
@@ -983,34 +845,42 @@ class DSS(torch.nn.Module):
         if numPoint == 0:
             print("No renderable points")
             return None
+        batchSize, numTotalPoints, _ = self.cameraPoints.shape
+        # saved_variables["renderable_idx"] = self.renderable_indices.detach().cpu()
+        # saved_variables["dIdp"] = torch.zeros([batchSize, numTotalPoints, 3], dtype=self.cameraPoints.dtype)
+        # saved_variables["dIdpMap"] = torch.zeros((self.projPoints.shape[0], self.camera.height, self.camera.width, 2), dtype=self.projPoints)
+        # saved_variables["projPoints"] = self.camera.projectPoints(self.cameraPoints)
+
         self._projPoints = self.camera.projectPoints(self._cameraPoints)
         Vr = self.computeVr(self._cameraPoints)
-        
+
         result = self.computeRho(self._projPoints.detach(),
                                  self._cameraPoints.detach(),
                                  self._cameraNormals.detach(), self.cutOffThreshold,
                                  Vr.detach(), self.camera.width, self.camera.height,
                                  self.camera.far, self.lowPassBandWidth)
-        rho, rhoValues, boundingBoxes, inPlane = result
-        # rho.register_hook(save_grad("drho"))
-        # inPlane.register_hook(save_grad("dinPlane"))
+        # rho is the filter value at pixel x
+        # rho is the filter value at ellipse center
+        # ellipse bounding box
+        # screen plane back-projected to 3D
+        rho, rhoValues, boundingBoxes, inPlane, Ms = result
         Ws = self.computeWk(self.shading, self._color,
                             self._cameraNormals, self._localNormals, self.ambientLight, self._cameraPoints,
                             self.cameraSuns, self.cameraPointlights)
-        final, pointIdxMap, rhoMap, WsMap, isBehind = rasterize(rho, rhoValues, Ws,
+        final, pointIdxMap, rhoMap, WsMap, isBehind = rasterizeDSS(rho, rhoValues, Ws,
                           self._projPoints,
                           boundingBoxes,
-                          inPlane,
+                          inPlane, Ms,
                           self._cameraPoints[:, :, :3].contiguous(),
                           self.camera.width, self.camera.height,
-                          self.camera.far, self.camera.focalLength, 
-                          localWidth=self.backwardLocalSize, localHeight=self.backwardLocalSize, 
+                          self.camera.far, self.camera.focalLength,
+                          localWidth=self.backwardLocalSize, localHeight=self.backwardLocalSize,
                           mergeThreshold=self.merge_threshold, considerZ=self.considerZ,
                           topK=self.mergeTopK)
         # compute occluded: isBehind = 1 and filterRho = 0
         occludedMap = (isBehind == 1) & (rhoMap == 0)
-        self.local_occlusion = rasterize_forward.guided_scatter_maps(numPoint, occludedMap.unsqueeze(-1), pointIdxMap, boundingBoxes)
-        self.nonvisibility.scatter_add_(1, self.renderable_indices.to(device=self.nonvisibility.device), 
+        self.local_occlusion = guided_scatter_maps(numPoint, occludedMap.unsqueeze(-1), pointIdxMap, boundingBoxes)
+        self.nonvisibility.scatter_add_(1, self.renderable_indices.to(device=self.nonvisibility.device),
                                            self.local_occlusion.to(device=self.nonvisibility.device, dtype=self.nonvisibility.dtype))
         final = final.to(device=self._cameraPoints.device)
         return final
@@ -1030,51 +900,6 @@ class Baseline(DSS):
         But it does not change any input fields.
         """
         super(Baseline, self).__init__(opt, scene)
-        
-    def computeRho(self, projPoints, cameraPoints, width, height, camFar):
-        """
-            projPoints    BxNx2 (TODO:change to BxNx2)
-            cameraPoints  BxNx3
-        return:
-            rho           NxbbHxbbW
-            boundingBoxes Nx4 xmin,ymin,xmax,ymax
-            depthMap      NxbbHxbbWx3
-        """
-        batchSize, PN, _ = projPoints.shape
-        sigma = 3
-        radius = 1.4*sigma
-        radius2 = radius**2
-        # B,N,4
-        boundingBoxes = torch.stack([torch.clamp(torch.floor(projPoints[:,:, 0]-radius).long(),min=0), 
-                                     torch.clamp(torch.floor(projPoints[:, :,1]-radius).long(),min=0),
-                                     torch.clamp(torch.ceil(projPoints[:, :,0]+radius).long(), max=width), 
-                                     torch.clamp(torch.ceil(projPoints[:, :,1]+radius).long(), max=height)], dim=-1)
-        
-        width = (boundingBoxes[:,:,2]-boundingBoxes[:,:,0]).max().item()
-        height = (boundingBoxes[:,:,3]-boundingBoxes[:,:,1]).max().item()
-        ygrid, xgrid = torch.meshgrid(torch.arange(height, dtype=projPoints.dtype, device=projPoints.device),
-                        torch.arange(width,  dtype=projPoints.dtype, device=projPoints.device))
-        ygrid = ygrid.unsqueeze(0).expand(batchSize, -1, -1)
-        xgrid = xgrid.unsqueeze(0).expand(batchSize, -1, -1)
-        
-        # B x N x height x width x 2
-        pixs = torch.stack([xgrid, ygrid], dim=-1).unsqueeze(1).expand(-1, PN, -1, -1, -1)
-        pixs = pixs + boundingBoxes[:, :, :2].unsqueeze(2).unsqueeze(2).to(dtype=pixs.dtype)
-
-        # grid of camera-plane coordinates relative to projected point (B, N, H, W, 2)
-        pixs = pixs - projPoints[:, :, :2].unsqueeze(2).unsqueeze(2)
-        distance2 = torch.sum(pixs * pixs, dim=-1)
-        # B x N x H x W gaussian values
-        rhos = torch.exp(-distance2/2/sigma/sigma)
-        # filter outside cutoff 
-        outofSupport = distance2>radius2
-        rhos = torch.where(outofSupport, torch.zeros_like(rhos), rhos)
-
-        inplane = cameraPoints[:, :, :3].unsqueeze(2).unsqueeze(2).expand(-1, -1, rhos.shape[2], rhos.shape[3], -1).contiguous()
-        depths = torch.where(outofSupport, torch.full((1, 1, 1, 1), camFar, dtype=inplane.dtype, device=inplane.device), inplane[:,:,:,:,2])
-        inplane[:, :, :, :, 2] = depths
-        # BxNxHxWx3
-        return rhos, boundingBoxes, inplane
 
 
     def render(self, **kwargs):
@@ -1087,68 +912,36 @@ class Baseline(DSS):
             return None
         self._projPoints = self.camera.projectPoints(self._cameraPoints)
 
-        # Vr = self.computeVr(self._cameraPoints)
-        result = self.computeRho(self._projPoints,
-                                 self._cameraPoints,
-                                 self.camera.width, self.camera.height, self.camera.far)
-        rho, boundingBoxes, inPlane = result
-        # rho.register_hook(save_grad("drho"))
-        # inPlane.register_hook(save_grad("dinPlane"))
+        Vr = self.computeVr(self._cameraPoints)
+        result = self.computeRho(self._projPoints.detach(),
+                                 self._cameraPoints.detach(),
+                                 self._cameraNormals.detach(), self.cutOffThreshold,
+                                 Vr.detach(), self.camera.width, self.camera.height,
+                                 self.camera.far, self.lowPassBandWidth)
+        # rho is the filter value at pixel x
+        # rhoValues is the filter value at ellipse center
+        # ellipse bounding box
+        # screen plane back-projected to 3D
+        rho, rhoValues, boundingBoxes, inPlane, Ms = result
+
         Ws = self.computeWk(self.shading, self._color,
                             self._cameraNormals, self._localNormals, self.ambientLight, self._cameraPoints,
                             self.cameraSuns, self.cameraPointlights)
-        
-        final, pointIdxMap, rhoMap, WsMap, isBehind = baseline_rasterize(rho, Ws,
-                                                                        self._projPoints,
-                                                                        boundingBoxes,
-                                                                        inPlane,
-                                                                        self.camera.width, self.camera.height, self.camera.far,
-                                                                        localWidth=self.backwardLocalSize, localHeight=self.backwardLocalSize, 
-                                                                        mergeThreshold=self.merge_threshold,
-                                                                        topK=self.mergeTopK)
-        self.occludedMap = rasterize_forward.scatter_maps(numPoint, rhoMap.unsqueeze(-1), pointIdxMap)
-        self.nonvisibility.scatter_add_(1, self.renderable_indices.to(device=self.nonvisibility.device), occludedMap.to(device=self.nonvisibility.device))
+
+        final, pointIdxMap, rhoMap, WsMap, isBehind = rasterizeRBF(rho, rhoValues, Ws,
+                          self._projPoints,
+                          boundingBoxes,
+                          inPlane, Ms,
+                          self._cameraPoints[:, :, :3].contiguous(),
+                          self.camera.width, self.camera.height,
+                          self.camera.far, self.camera.focalLength,
+                          localWidth=self.backwardLocalSize, localHeight=self.backwardLocalSize,
+                          mergeThreshold=self.merge_threshold, considerZ=self.considerZ,
+                          topK=self.mergeTopK)
+        # compute occluded: isBehind = 1 and filterRho = 0
+        occludedMap = (isBehind == 1) & (rhoMap == 0)
+        self.local_occlusion = guided_scatter_maps(numPoint, occludedMap.unsqueeze(-1), pointIdxMap, boundingBoxes)
+        self.nonvisibility.scatter_add_(1, self.renderable_indices.to(device=self.nonvisibility.device),
+                                           self.local_occlusion.to(device=self.nonvisibility.device, dtype=self.nonvisibility.dtype))
         final = final.to(device=self._cameraPoints.device)
         return final
-
-
-class GatherMaps(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, values, indiceMap, defaultValue):
-        ctx.numPoint = values.shape[1]
-        ctx.save_for_backward(indiceMap)
-        gathered = rasterize_forward.gather_maps(values, indiceMap, defaultValue)
-        return gathered
-    
-    @staticmethod
-    def backward(ctx, grad):
-        indiceMap, = ctx.saved_tensors
-        dIn = rasterize_forward.scatter_maps(ctx.numPoint, grad, indiceMap)
-        return dIn, None, None
-
-gather_maps = GatherMaps.apply
-def baseline_rasterize(rho, Ws, projPoints, boundingBoxes, inplane,
-                       width, height, camFar, localWidth, localHeight, mergeThreshold, topK):
-        batchSize, numPoints, bbHeight, bbWidth = rho.shape
-        pointIdxMap = torch.full((batchSize, height, width, topK), -1, dtype=torch.int64, device=rho.device)
-        depthMap = torch.full((batchSize, height, width, topK), camFar, dtype=rho.dtype, device=rho.device)
-        bbPositionMap = torch.full((batchSize, height, width, topK, 2), -1, dtype=torch.int64, device=rho.device)
-        rasterize_forward.compute_visibility_maps(boundingBoxes[:, :, :2].contiguous(), inplane, pointIdxMap, bbPositionMap, depthMap)
-        # gather rho, wk
-        WsMap = gather_maps(Ws, pointIdxMap, 0.0)
-        # per batch indice for rhos bx(Nxhxw)
-        # gather rho, Ws values from pointIdxMap and bbPositionMap, if idx < 0 (unset), then set rho=0 Ws=0
-        totalIdxMap = pointIdxMap*bbHeight*bbWidth+bbPositionMap[:, :, :, :, 0]*bbWidth+bbPositionMap[:, :, :, :, 1]
-        validMaps = totalIdxMap >= 0
-        totalIdxMap = torch.where(validMaps, totalIdxMap, torch.full_like(totalIdxMap, -1))
-        rhoMap = gather_maps(rho.reshape(batchSize, -1, 1), totalIdxMap, 0.0).squeeze(-1)
-        # check depth jump
-        isBehind = torch.zeros(depthMap.shape, dtype=torch.uint8, device=depthMap.device)
-        isBehind[:, :, :, 1:] = (depthMap[:, :, :, 1:]-depthMap[:, :, :, :1]) > mergeThreshold
-        rhoMap_filtered = torch.where(isBehind, torch.zeros(1, 1, 1, 1, device=rhoMap.device, dtype=rhoMap.dtype), rhoMap)
-        # WsMap[:, :, :, 1:, :] = torch.where(isBehind.unsqueeze(-1), torch.zeros(1, 1, 1, 1, 1, device=WsMap.device, dtype=WsMap.dtype), WsMap[:, :, :, 1:])
-        # normalize rho
-        sumRho = torch.sum(rhoMap_filtered, dim=-1, keepdim=True)
-        rhoMap_normalized = rhoMap_filtered/(sumRho+1e-10)
-        pixels = torch.sum(WsMap * rhoMap_normalized.unsqueeze(-1), dim=3)
-        return pixels, pointIdxMap, rhoMap_normalized, WsMap, isBehind

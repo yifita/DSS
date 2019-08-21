@@ -73,6 +73,7 @@ class BaseOptions():
                             default=15, help='focal length for generated cameras')
         parser.add_argument('--cutOffThreshold',
                             type=float, default=1, help='cutoff threshold')
+        parser.add_argument('--Vrk_h', type=float, default=0.02, help='standard deviation for V_r^h in EWA')
         parser.add_argument('--backwardLocalSize',
                             type=int, default=128, help='window size for computing pixel loss')
         parser.add_argument('--backwardLocalSizeDecay', default=0.9,

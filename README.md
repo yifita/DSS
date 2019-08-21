@@ -1,13 +1,13 @@
-## DSS: Differentiable Surface Splatting ([Arxiv](https://arxiv.org/abs/1906.04173))
+## DSS: Differentiable Surface Splatting
 ![bunny](images/teaser.png)
 
 ### installation
 1. clone
 ````bash
-git clone --recursive https://github.com/yifita/DSS.git
+git clone --recursive https://gitlab.inf.ethz.ch/OU-SORKINE/dss.git
 cd dss
 ````
-1. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
+2. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
 ````bash
 # install cuda, cudnn, nccl from nvidia
 # we tested with cuda 10.1, cudnn 7.5, nccl 1.3.5
@@ -26,7 +26,7 @@ pip install plyfile
 cd pytorch_points
 python setup.py install
 cd ..
-python setup.py develop 
+python setup.py develop
 ````
 ### Demos
 
@@ -44,7 +44,7 @@ python learn_shape_from_target.py example_data/scenes/cube_20k.json  -t example_
 ![yoga1](images/yoga6.gif)
 ```bash
 python finetune_shape.py learn_examples/yoga6_z_paper_1/final_scene.json  -t example_data/scenes/yoga6.json --name yoga6_z_paper_1_1
-````
+```
 ![yoga2](images/yoga6-1.gif)
 
 #### denoising
@@ -58,5 +58,14 @@ python learn_image_filter.py example_data/scenes/pix2pix_denoise.json --cloud ex
 
 # 1.0% noise
 python learn_image_filter.py example_data/scenes/pix2pix_denoise_noise01.json --cloud example_data/noisy1_points/a72-seated_jew_aligned_pca.ply
-````
+```
 ![denoise_0.3noise](images/seated_all.png)
+
+#### other functions
+##### render object 360 degree
+```bash
+python sequences.py example_data/scenes/teapot.json --points example_data/pointclouds/teapot_normal_dense.ply --width 512 --height 512 --output renders/teapot_360
+# then you can create gif. on ubuntu this can be done with
+convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animation.gif
+```
+![teapot_sequence](images/teapot_sequence.gif)

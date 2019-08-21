@@ -17,7 +17,7 @@ from .matrixConstruction import rotationMatrixX, rotationMatrixY, rotationMatrix
 
 def saveAsPng(torchImage, fileName, cmin=None, cmax=None):
     """
-    No unexpected index flips are performed: 
+    No unexpected index flips are performed:
     A matrix [[0, 120], [200, 255]] will create an image s.t.:
     the upper left corner is black
     the upper right corner is the darker grey
@@ -25,8 +25,8 @@ def saveAsPng(torchImage, fileName, cmin=None, cmax=None):
     the lower right corner is white
     """
     torchImage = torchImage
-    # alpha = torch.sum(torchImage.abs(), dim=-1, keepdim=True)
-    # alpha = torch.where(alpha == 0, torch.zeros_like(alpha), torch.full_like(alpha, 255.0))
+    alpha = torch.sum(torchImage.abs(), dim=-1, keepdim=True)
+    alpha = torch.where(alpha == 0, torch.zeros_like(alpha), torch.full_like(alpha, 255.0))
     h, w = torchImage.shape[:2]
     if torchImage.shape[-1] == 1:
         torchImage = torchImage.expand(-1, -1, 3)
@@ -40,7 +40,7 @@ def saveAsPng(torchImage, fileName, cmin=None, cmax=None):
     pixels = torchImage - cmin
     pixels = pixels/(cmax-cmin)
     pixels = pixels * 255.0
-    # pixels = torch.cat([pixels, alpha], dim=-1)
+    pixels = torch.cat([pixels, alpha], dim=-1)
     imageio.imwrite(fileName, pixels.numpy().astype(np.uint8))
 
 def readImage(fileName, device=None):
@@ -162,7 +162,7 @@ def json2Lights(data, device=None):
         sunDirections, sunColors = torch.chunk(suns, 2, dim=1)
     else:
         sunDirections = sunColors = suns
-        
+
     if pointlights.size(0) > 0:
         pointlightPositions, pointlightColors = torch.chunk(pointlights, 2, dim=1)
     else:
@@ -235,7 +235,7 @@ def json2RotationMatrix(data, device=None):
                     print("Expected three scalar entries in row of rotation matrix.")
                     return torch.eye(3, device=device)
             return json2Matrix(data["matrix"], device=device)
-        
+
         if "X" in data:
             X = json2Matrix([data["X"]], device=device)
         if "Y" in data:
@@ -338,7 +338,7 @@ def cameras2Json(cameras):
         cam['near'] = scalar2Json(camera.near)
         cam['far'] = scalar2Json(camera.far)
         _cameras.append(cam)
-        
+
     return _cameras
 
 def json2Cloud(data, baseDir, device=None):
@@ -347,31 +347,16 @@ def json2Cloud(data, baseDir, device=None):
         cloud.shading = data['shading']
     if 'backfaceCulling' in data:
         cloud.backfaceCulling = data['backfaceCulling']
-    # cutoffThreshold = splatRadius^2, because cutoffThreshold corresponds to d^2 in the ellipse equation: ax^2 + by^2 + c xy = d^2
-    # splatRadius is a convenience property as it is a lot easier to reason linearly
-    if 'splatRadius' in data:
-        splatRadius = data['splatRadius']
-        cloud.cutoffThreshold = json2Scalar(splatRadius*splatRadius, device=device)
-    if 'cutoffThreshold' in data:
-        cloud.cutoffThreshold = json2Scalar(data['cutoffThreshold'], device=device)
-    if 'boundingBoxCutoffThresholdMultiplier' in data:
-        cloud.boundingBoxCutoffThresholdMultiplier = json2Scalar(data['boundingBoxCutoffThresholdMultiplier'], device=device)
-    if 'boundingBoxExtraMargin' in data:
-        cloud.boundingBoxExtraMargin = data['boundingBoxExtraMargin']
-    if 'backwardBoundingBoxExtraMargin' in data:
-        cloud.backwardBoundingBoxMargin = data['backwardBoundingBoxExtraMargin']
     if 'position' in data:
         cloud.position = json2Position(data['position'], device=device)
     if 'rotation' in data:
         cloud.rotation = json2RotationMatrix(data['rotation'], device=device)
     if 'scale' in data:
-        cloud.scale = json2Scalar(data['scale'], device=device)
-    if 'Vrk_mode' in data:
-        cloud.VrkMode = data['Vrk_mode']
+        cloud.scale = json2Vector(data['scale'], device=device)
 
     if 'points' not in data:
         print("Warning: No point data given for cloud")
-    elif type(data['points']) is str:
+    elif 'points' in data:
         ## assume it is a path to a file with the data
         cloudPath = os.path.join(baseDir, data['points'])
         #print("Notice: Point cloud path: " + cloudPath)
@@ -379,26 +364,25 @@ def json2Cloud(data, baseDir, device=None):
         cloud.localPoints = points[:,0:3]
         cloud.localNormals = points[:, 3:6]
         cloud.color = points[:,6:9]
-    else:
-        ## assume it is a well-formed array
-        points = torch.tensor(data['points'], dtype=torch.float, device=device)
-        cloud.localPoints = points[:,0:3]
-        cloud.localNormals = points[:, 3:6]
-        cloud.color = points[:,6:9]
+    if 'color' in data:
+        cloud.color = json2Scalar(data['color'], device=device)
+        if hasattr(cloud, "localPoints"):
+            if cloud.color.dim() == 1:
+                cloud.color = cloud.color.unsqueeze(0).expand(cloud.localPoints.shape[0])
+            elif cloud.color.dim() == 2 and cloud.color.shape[0] == 1:
+                cloud.color = cloud.color.expand(cloud.localPoints.shape[0], -1)
+            else:
+                assert(cloud.color.shape == cloud.localPoints.shape)
     return cloud
 
 def cloud2Json(cloud, cloudpath=None):
     out = {}
     out['shading'] = cloud.shading
     out['backfaceCulling'] = cloud.backfaceCulling
-    out['cutoffThreshold'] = scalar2Json(cloud.cutoffThreshold)
-    out['boundingBoxCutoffThresholdMultiplier'] = scalar2Json(cloud.boundingBoxCutoffThresholdMultiplier)
-    out['boundingBoxExtraMargin'] = (cloud.boundingBoxExtraMargin)
-    out['backwardBoundingBoxExtraMargin'] = (cloud.backwardBoundingBoxMargin)
     out['position'] = vector2Json(cloud.position)
     out['rotation'] = matrix2Json(cloud.rotation)
     out['scale'] = scalar2Json(cloud.scale)
-    out['Vrk_mode'] = (cloud.VrkMode)
+    out['color'] = vector2Json(cloud.color)
     if cloudpath is not None:
         out['points'] = cloudpath
     else:
