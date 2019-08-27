@@ -307,11 +307,11 @@ class RasterizeAutograd(torch.autograd.Function):
                                                              localHeight, localWidth,
                                                              gradPixels, pointIdxMap, rhoMap, WsMap, depthMap, isBehind,
                                                              pixels, boundingBoxes, projPoints, Ws, depthValues, rhoValues, dIdp, dIdz)
+            dIdp, dIdz = outputs
             # outputs = rasterize_backward.visibility_debug_backward(mergeThreshold, focalLength, considerZ,
             #                                                        localHeight, localWidth, 0,
             #                                                        gradPixels, pointIdxMap, rhoMap, WsMap, depthMap, isBehind,
             #                                                        pixels, boundingBoxes, projPoints, Ws, depthValues, rhoValues, dIdp, dIdz)
-            # dIdp, dIdz = outputs
             dIdcam = torch.zeros_like(cameraPoints)
             dIdcam[:, :, 2] = dIdz
         else:
