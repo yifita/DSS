@@ -337,7 +337,7 @@ __global__ void visibility_debug_backward_kernel(
               dldI += (newColors[c] - curPixelValues[c]) * curColorGrad[c];
               deltaI += (newColors[c] - curPixelValues[c]);
             }
-            // if (dldI < 0.0)
+            if (dldI < 0.0)
             {
               // another point at pixel i,j is in front of the current point by
               // a threshold, need to change z, otherwise moving to that
