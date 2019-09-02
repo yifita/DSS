@@ -18,6 +18,7 @@ code for paper Differentiable Surface Splatting for Point-based Geometry Process
       - [render object 360 degree](#render-object-360-degree)
   - [video](#video)
   - [cite](#cite)
+  - [Acknowledgement](#acknowledgement)
 
 
 
@@ -121,3 +122,6 @@ year = {2019},
 }
 ``` 
 
+## Acknowledgement
+We would like to thank Federico Danieli for the insightful discussion, Phillipp Herholz for the timely feedack, Romann Weber for the video voice-over and Derek Liu for the help during the rebuttal.
+This work was supported in part by gifts from Adobe, Facebook and Snap, Inc.
