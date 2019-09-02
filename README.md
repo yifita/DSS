@@ -90,7 +90,7 @@ python learn_image_filter.py example_data/scenes/pix2pix_denoise_noise01.json --
 ```
 
 
-![denoise_0.3noise](images/seated_all.png)
+![denoise_1noise](images/armadillo_2_all.png)
 
 ### other functions
 #### render object 360 degree
