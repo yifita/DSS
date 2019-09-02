@@ -1,7 +1,27 @@
-## DSS: Differentiable Surface Splatting
+# DSS: Differentiable Surface Splatting
+| [Arxiv](https://arxiv.org/abs/1906.04173) | [Project page](https://igl.ethz.ch/projects/differentiable-surface-splatting/) |
+| ----------------------------------------- | ------------------------------------------------------------------------------ |
+
 ![bunny](images/teaser.png)
 
-### installation
+code for paper Differentiable Surface Splatting for Point-based Geometry Processing
+
+- [DSS: Differentiable Surface Splatting](#dss-differentiable-surface-splatting)
+  - [installation](#installation)
+  - [Demos](#demos)
+      - [inverse rendering - shape deformation](#inverse-rendering---shape-deformation)
+        - [2D grid to teapot](#2d-grid-to-teapot)
+        - [sphere to teapot](#sphere-to-teapot)
+        - [cube to yoga](#cube-to-yoga)
+      - [denoising](#denoising)
+    - [other functions](#other-functions)
+      - [render object 360 degree](#render-object-360-degree)
+  - [video](#video)
+  - [cite](#cite)
+
+
+
+## installation
 1. clone
 ````bash
 git clone --recursive https://gitlab.inf.ethz.ch/OU-SORKINE/dss.git
@@ -28,7 +48,7 @@ python setup.py install
 cd ..
 python setup.py develop
 ````
-### Demos
+## Demos
 
 #### inverse rendering - shape deformation
 ##### 2D grid to teapot
@@ -57,20 +77,47 @@ python finetune_shape.py learn_examples/yoga6_z_paper_1/final_scene.json  -t exa
 cd trained_models
 # unix system can run this command directly
 ./download_data.sh
-
+```
+```bash
 # 0.3% noise
 python learn_image_filter.py example_data/scenes/pix2pix_denoise.json --cloud example_data/pointclouds/noisy03_points/a72-seated_jew_aligned_pca.ply
+````
+![denoise_0.3noise](images/seated_all.png)
 
+```bash
 # 1.0% noise
 python learn_image_filter.py example_data/scenes/pix2pix_denoise_noise01.json --cloud example_data/noisy1_points/a72-seated_jew_aligned_pca.ply
 ```
+
+
 ![denoise_0.3noise](images/seated_all.png)
 
-#### other functions
-##### render object 360 degree
+### other functions
+#### render object 360 degree
 ```bash
 python sequences.py example_data/scenes/teapot.json --points example_data/pointclouds/teapot_normal_dense.ply --width 512 --height 512 --output renders/teapot_360
 # then you can create gif. on ubuntu this can be done with
 convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animation.gif
 ```
 ![teapot_sequence](images/teapot_sequence.gif)
+
+## video
+[![accompanying video](images/video-thumb.png)](https://youtu.be/gqI0BoVVDzY "Accompanying video")
+<!-- [Accompanying video](https://youtu.be/gqI0BoVVDzY) -->
+
+## cite
+Please cite us if you find the code useful!
+```
+@article{Yifan:DSS:2019,
+author = {Wang Yifan and Felice Serena and 
+        Shihao Wu and
+        Cengiz {\"{O}}ztireli and
+        Olga Sorkine{-}Hornung},
+title = {Differentiable Surface Splatting for Point-based Geometry Processing},
+journal = {ACM Transactions on Graphics (proceedings of ACM SIGGRAPH ASIA)},
+volume = {38},
+number = {6},
+year = {2019},
+}
+``` 
+
