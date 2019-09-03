@@ -103,8 +103,8 @@ convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animati
 ![teapot_sequence](images/teapot_sequence.gif)
 
 ## video
-[![accompanying video](images/video-thumb.png)](https://youtu.be/gqI0BoVVDzY "Accompanying video")
-<!-- [Accompanying video](https://youtu.be/gqI0BoVVDzY) -->
+[![accompanying video](images/video-thumb.png)](https://youtu.be/Q8iTkmIky0o "Accompanying video")
+<!-- [Accompanying video](https://youtu.be/Q8iTkmIky0o) -->
 
 ## cite
 Please cite us if you find the code useful!
