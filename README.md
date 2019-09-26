@@ -110,7 +110,7 @@ convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animati
 Please cite us if you find the code useful!
 ```
 @article{Yifan:DSS:2019,
-author = {Wang Yifan and Felice Serena and 
+author = {Yifan Wang and Felice Serena and 
         Shihao Wu and
         Cengiz {\"{O}}ztireli and
         Olga Sorkine{-}Hornung},
