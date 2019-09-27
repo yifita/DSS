@@ -382,7 +382,6 @@ def cloud2Json(cloud, cloudpath=None):
     out['position'] = vector2Json(cloud.position)
     out['rotation'] = matrix2Json(cloud.rotation)
     out['scale'] = scalar2Json(cloud.scale)
-    out['color'] = vector2Json(cloud.color)
     if cloudpath is not None:
         out['points'] = cloudpath
     else:
