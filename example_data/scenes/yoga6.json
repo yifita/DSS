@@ -3,7 +3,7 @@
         "camFocalLength": 9,
         "camOffset": 23,
         "source": "example_data/scenes/cube_20k.json",
-        "cycles": 14,
+        "cycles": 9,
         "cutOffThreshold": 1.2,
         "backwardLocalSize": 128,
         "backwardLocalSizeDecay": 0.95,
