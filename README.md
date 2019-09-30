@@ -1,5 +1,5 @@
 # DSS: Differentiable Surface Splatting
-| [Arxiv](https://arxiv.org/abs/1906.04173) | [Project page](https://igl.ethz.ch/projects/differentiable-surface-splatting/) |
+| [Paper PDF](https://igl.ethz.ch/projects/differentiable-surface-splatting/DSS-2019-SA-Yifan-etal.pdf) | [Project page](https://igl.ethz.ch/projects/differentiable-surface-splatting/) |
 | ----------------------------------------- | ------------------------------------------------------------------------------ |
 
 ![bunny](images/teaser.png)
