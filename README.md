@@ -1,5 +1,5 @@
 # DSS: Differentiable Surface Splatting
-| [Arxiv](https://arxiv.org/abs/1906.04173) | [Project page](https://igl.ethz.ch/projects/differentiable-surface-splatting/) |
+| [Paper PDF](https://igl.ethz.ch/projects/differentiable-surface-splatting/DSS-2019-SA-Yifan-etal.pdf) | [Project page](https://igl.ethz.ch/projects/differentiable-surface-splatting/) |
 | ----------------------------------------- | ------------------------------------------------------------------------------ |
 
 ![bunny](images/teaser.png)
@@ -110,10 +110,11 @@ convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animati
 Please cite us if you find the code useful!
 ```
 @article{Yifan:DSS:2019,
-author = {Yifan Wang and Felice Serena and 
-        Shihao Wu and
-        Cengiz {\"{O}}ztireli and
-        Olga Sorkine{-}Hornung},
+author = {Yifan, Wang and 
+          Serena, Felice and 
+          Wu, Shihao and
+          {\"{O}}ztireli, Cengiz and
+         Sorkine{-}Hornung, Olga},
 title = {Differentiable Surface Splatting for Point-based Geometry Processing},
 journal = {ACM Transactions on Graphics (proceedings of ACM SIGGRAPH ASIA)},
 volume = {38},
