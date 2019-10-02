@@ -18,12 +18,14 @@ class RenderOptions(BaseOptions):
         return parser
 
     def parse(self):
-        opt = super().parse()
-        with open(opt.source, "r") as f:
+        self.opt = super().parse()
+        with open(self.opt.source, "r") as f:
             targetJson = json.load(f)
             if "cmdLineArgs" in targetJson:
                 for key, value in targetJson['cmdLineArgs'].items():
                     if key == "source":
                         continue
-                    setattr(opt, key, value)
-        return opt
+                    setattr(self.opt, key, value)
+        self.opt = super().parse()
+        self.print_options(self.opt)
+        return self.opt

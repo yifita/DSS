@@ -5,7 +5,7 @@ from collections import OrderedDict
 from ..core.renderer import createSplatter, SmapeLoss, NormalLengthLoss
 from ..core.camera import CameraSampler, PinholeCamera
 from ..core.scene import Scene
-from ..cuda import rasterize_forward
+from ..cuda import rasterize_forward, gather_maps
 from ..misc import imageFilters
 from pytorch_points.utils.pc_utils import read_ply
 from pytorch_points.network import operations
@@ -71,7 +71,7 @@ def removeOutlier(gtImage, projPoints, sigma=50):
     projIJ = torch.where(torch.any((projIJ >= H) | (projIJ < 0), dim=-1, keepdim=True), torch.full_like(projIJ, -1), projIJ)
     ijIndices = projIJ[:, 0] + projIJ[:, 1] * W
     # N, use gather_maps, reshape to BxHxWxk, ignore points outside image
-    isInside = rasterize_forward.gather_maps(mask.view(1, -1, 1).cuda(), ijIndices.view(1, -1, 1, 1).cuda(), 1.0).view(-1).to(device=knn_d.device)
+    isInside = gather_maps(mask.view(1, -1, 1).cuda(), ijIndices.view(1, -1, 1, 1).cuda(), 1.0).view(-1).to(device=knn_d.device)
     # if point is inside, set knn_d to zero
     # N
     knn_d = knn_d.squeeze()
@@ -193,52 +193,48 @@ class Trainer(object):
         self.model.clearVisibility()
         self.apply_projection = (self.opt.projectionFreq > 0 and (self.step+1) % self.opt.projectionFreq == 0)
         self.apply_repulsion = (self.opt.repulsionFreq > 0 and (self.step+1) % self.opt.repulsionFreq == 0)
-        def closure():
-            nValidViews = 0
-            loss = 0
-            # compute gradient for each camera view
-            for camID, cam in enumerate(self.cameras):
-                if self.groundtruths[camID] is None:
-                    continue
-                self.forward(camID)
-                if self.predictions[camID] is None:
-                    continue
-                loss = self.imageLoss(self.predictions[camID], self.groundtruths[camID].detach()) * self.opt.imageWeight
-                self.metric[self.modifier] += loss.cpu().item()
-                self.loss_image[camID] = loss.detach()
-                # regularizer normal length
-                if self.model.localNormals.requires_grad:
-                    reg = 0.001 * self.normalLengthLoss(self.model._localNormals).cuda()
-                    loss = loss + reg
-                    self.loss_reg[camID] = reg.cpu().detach().item()
-                # regularizer repulsion
-                if self.model.localPoints.requires_grad:
-                    if self.apply_repulsion:
-                        occlusionCount = self.model.nonvisibility/(self.model.renderTimes.to(device=self.model.nonvisibility.device)+0.01)
-                        reg = self.model.pointRegularizerLoss(self.model.cameraPoints,
-                                                            self.model.localNormals.detach(),
-                                                            occlusionCount,
-                                                            self.model.renderable_indices,
-                                                            use_density=True, include_projection=False)
-                        if isinstance(reg, torch.Tensor):
-                            reg = reg.cuda()
-                            loss = loss + reg
-                            self.loss_reg[camID] = reg.cpu().detach().item()
-                loss.backward()
-                nValidViews += 1
+        # compute gradient for each camera view
+        nValidViews = 0
+        for camID, cam in enumerate(self.cameras):
+            if self.groundtruths[camID] is None:
+                continue
+            self.forward(camID)
+            if self.predictions[camID] is None:
+                continue
+            loss = self.imageLoss(self.predictions[camID], self.groundtruths[camID].detach()) * self.opt.imageWeight
+            self.metric[self.modifier] += loss.cpu().item()
+            self.loss_image[camID] = loss.detach()
+            # regularizer normal length
+            if self.model.localNormals.requires_grad:
+                reg = 0.001 * self.normalLengthLoss(self.model._localNormals).cuda()
+                loss = loss + reg
+                self.loss_reg[camID] = reg.cpu().detach().item()
+            # regularizer repulsion
+            if self.model.localPoints.requires_grad:
+                if self.apply_repulsion:
+                    occlusionCount = self.model.nonvisibility/(self.model.renderTimes.to(device=self.model.nonvisibility.device)+0.01)
+                    reg = self.model.pointRegularizerLoss(self.model.cameraPoints,
+                                                          self.model.localNormals.detach(),
+                                                          occlusionCount,
+                                                          self.model.renderable_indices,
+                                                          use_density=True, include_projection=False)
+                    if isinstance(reg, torch.Tensor):
+                        reg = reg.cuda()
+                        loss = loss + reg
+                        self.loss_reg[camID] = reg.cpu().detach().item()
+            loss.backward()
+            nValidViews += 1
 
-            # average gradient for all views
-            for p in self.model.parameters():
-                if p.requires_grad:
-                    p.grad /= (self.model.renderTimes + 1e-2)
-            # clip gradients
-            torch.nn.utils.clip_grad_value_(self.model.parameters(), self.opt.clipGrad)
-            # metric is the average over all cameras
-            self.metric[self.modifier] /= max(nValidViews,1)
-            return loss
-
-        self.optimizers[self.modifier].step(closure)
+        # metric is the average over all cameras
+        self.metric[self.modifier] /= nValidViews
+        # average gradient for all views
+        for p in self.model.parameters():
+            if p.requires_grad:
+                p.grad /= (self.model.renderTimes + 1e-2)
         self.step += 1
+        # clip gradients
+        torch.nn.utils.clip_grad_value_(self.model.parameters(), self.opt.clipGrad)
+        self.optimizers[self.modifier].step()
         self.update_learning_rate()
 
         # projection
@@ -263,13 +259,12 @@ class Trainer(object):
                                             points=self.model.localPoints, camWidth=self.opt.width, camHeight=self.opt.height,
                                             filename=self.opt.cameraFile)
 
-        # self.optimizers = OrderedDict([(modifier, torch.optim.SGD([getattr(self.model, modifier)], lr=lr, momentum=0.1, nesterov=True))
-        self.optimizers = OrderedDict([(modifier, torch.optim.LBFGS([getattr(self.model, modifier)], lr=lr))
+        self.optimizers = OrderedDict([(modifier, torch.optim.SGD([getattr(self.model, modifier)], lr=lr, momentum=0.1, nesterov=True))
         # self.optimizers = OrderedDict([(modifier, torch.optim.Adam([getattr(self.model, modifier)], lr=lr, betas=(0.1, 0.5)))
                                        for modifier, lr in self.learningRates.items()])
-        self.schedulers = OrderedDict([(modifier, torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20, verbose=True,
+        self.schedulers = OrderedDict([(modifier, torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizers[modifier], mode='min', factor=0.5, patience=int(self.opt.steps[i]*0.6), verbose=True,
                                                                                              threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=0.001))
-                                       for modifier, optimizer in self.optimizers.items()])
+                                       for i, modifier in enumerate(self.optimizers)])
 
     def eval(self):
         """Make models eval mode during test time"""

@@ -96,12 +96,12 @@ class BaseOptions():
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter, description='DSS optimization')
             parser = self.initialize(parser)
 
-        # get the basic options
-        opt, _ = parser.parse_known_args()
+            # save and return the parser
+            self.parser = parser
+            # get the basic options
+            opt, _ = self.parser.parse_known_args()
 
-        # save and return the parser
-        self.parser = parser
-        return parser.parse_args()
+        return self.parser.parse_args()
 
     def print_options(self, opt):
         """Print and save options

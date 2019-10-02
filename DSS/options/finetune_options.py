@@ -30,11 +30,15 @@ class FinetuneOptions(BaseOptions):
         self.opt = super().parse()
         with open(self.opt.ref, "r") as f:
             targetJson = json.load(f)
-        # parser again with new defaults
+            if "cmdLineArgs" in targetJson:
+                self.parser.set_defaults(**targetJson["cmdLineArgs"])
+            if "finetuneArgs" in targetJson:
+                self.parser.set_defaults(**targetJson["finetuneArgs"])
         try:
-            self.opt.camFocalLength = targetJson["cmdLineArgs"]["camFocalLength"]
-            self.opt.camOffset = 0.5*targetJson["cmdLineArgs"]["camOffset"]
+            self.parser.set_defaults(camOffset=0.5*targetJson["cmdLineArgs"]["camOffset"])
         except KeyError:
             pass
+        # parser again with new defaults
+        self.opt = super().parse()
         self.print_options(self.opt)
         return self.opt

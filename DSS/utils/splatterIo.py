@@ -40,6 +40,7 @@ def saveAsPng(torchImage, fileName, cmin=None, cmax=None):
     pixels = torchImage - cmin
     pixels = pixels/(cmax-cmin)
     pixels = pixels * 255.0
+    pixels = pixels.clamp_max(255.0)
     pixels = torch.cat([pixels, alpha], dim=-1)
     imageio.imwrite(fileName, pixels.numpy().astype(np.uint8))
 
@@ -382,7 +383,6 @@ def cloud2Json(cloud, cloudpath=None):
     out['position'] = vector2Json(cloud.position)
     out['rotation'] = matrix2Json(cloud.rotation)
     out['scale'] = scalar2Json(cloud.scale)
-    out['color'] = vector2Json(cloud.color)
     if cloudpath is not None:
         out['points'] = cloudpath
     else:

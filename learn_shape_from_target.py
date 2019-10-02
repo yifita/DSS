@@ -24,6 +24,7 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
     optimizerStep = 0.0
 
     log_variables = {}
+    writeScene(refScene, os.path.join(expr_dir, 't000_scene_gt.json'), os.path.join(expr_dir, "gt.ply"))
     with open(expr_dir + "/loss.csv", 'w') as loss_log:
         for c in range(opt.cycles):
             # creat new reference

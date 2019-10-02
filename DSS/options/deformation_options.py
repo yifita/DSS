@@ -19,5 +19,6 @@ class DeformationOptions(BaseOptions):
                 self.parser.set_defaults(**targetJson["cmdLineArgs"])
         # parser again with new defaults
         self.opt, _ = self.parser.parse_known_args()
+        self.opt = super().parse()
         self.print_options(self.opt)
         return self.opt

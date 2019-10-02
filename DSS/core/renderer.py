@@ -184,7 +184,7 @@ class DSS(torch.nn.Module):
         if self.device is None:
             self.device = torch.device("cpu")
         self.minBackwardLocalSize = 32
-        self.backfaceCulling = True
+        self.backfaceCulling = scene.cloud.backfaceCulling
 
         # parameters
         self.pointlightPositions = nn.Parameter(scene.pointlightPositions, requires_grad=False).cuda()
@@ -439,7 +439,6 @@ class DSS(torch.nn.Module):
             nonvisibility = torch.gather(nonvisibility, 1, idxList.expand(-1, -1, nonvisibility.shape[-1]))
         PN = points.shape[1]
         rradius2 = rradius**2
-        # repulsion force to projPoints/cameraPoints
         iradius = 1/(rradius2)/4
         # first KNN (B, N, k, c)
         if points.is_cuda:
@@ -457,7 +456,7 @@ class DSS(torch.nn.Module):
         # give invisible points a small weight
         phi = torch.gather(nonvisibility_data.unsqueeze(1).expand(-1, PN, -1, -1), 2, knn_idx.unsqueeze(-1)).squeeze(-1)
         # phi = torch.where(phi > 0, torch.full([1, 1, 1], 1.0), torch.full([1, 1, 1], 1.0))
-        phi = 1 / (1+phi)
+        phi = 1 / (1+phi)**2
 
         # B, N, k
         theta = torch.exp(-distance2*iradius)
@@ -483,7 +482,7 @@ class DSS(torch.nn.Module):
         update_normal = torch.where((torch.sum(distance2 <= rradius2, dim=-1) < 3).unsqueeze(-1) | (project_weight_sum < 1e-7), torch.zeros_like(update_normal), update_normal)
         point_update = -(update_normal * (project_dist_sum / project_weight_sum))
         point_update *= (self.projection_weight*decay)
-        point_update = torch.clamp(point_update, -0.01, 0.01)
+        point_update = torch.clamp(point_update, -0.02, 0.02)
         if not _check_values(point_update):
             import pdb; pdb.set_trace()
         # apply this force
@@ -643,6 +642,7 @@ class DSS(torch.nn.Module):
                 shade += pointlight
 
             return shade
+        raise ValueError("invalid \"mode\" (supported mode includes \"albedo\", \"depth\", \"diffuse\")")
 
     def computeRho(self, projPoints, cameraPoints, cameraNormals, cutoffThreshold,
                    Vrk, width, height, camFar, lowPassBandWidth):

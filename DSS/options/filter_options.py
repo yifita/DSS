@@ -37,6 +37,7 @@ class FilterOptions(BaseOptions):
     def parse(self):
         self.opt = super().parse()
         self.opt.modifiers = ["localNormals", "localPoints"]
+        self.opt.isFiltering = True
         with open(self.opt.source, "r") as f:
             targetJson = json.load(f)
             if "cmdLineArgs" in targetJson:

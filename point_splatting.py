@@ -46,7 +46,7 @@ if __name__ == "__main__":
                 scene.cameras[i].width = opt.width
                 scene.cameras[i].height = opt.height
 
-        splatter.initCameras(cameras=scene.cameras)
+        splatter.initCameras(cameras=scene.cameras, genSunMode="triColor")
 
         for pointPath, pointRelPath in zip(points_paths, points_relpaths):
             keyName = os.path.join(os.path.join(opt.output, pointRelPath[:-4]))
