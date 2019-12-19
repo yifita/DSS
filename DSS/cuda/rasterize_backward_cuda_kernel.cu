@@ -230,8 +230,7 @@ __device__ void after_drawing_closer(const int numColors, const int topK,
 template <typename scalar_t>
 __device__ scalar_t eps_guard(scalar_t v)
 {
-  // const scalar_t eps = 0.01;
-  const scalar_t eps = 1e-5;
+  const scalar_t eps = 0.01;
   if (v < 0)
   {
     return v - eps;
@@ -337,60 +336,68 @@ __global__ void visibility_debug_backward_kernel(
               dldI += (newColors[c] - curPixelValues[c]) * curColorGrad[c];
               deltaI += (newColors[c] - curPixelValues[c]);
             }
-            if (dldI < 0.0)
+            if (curPointDepth - newDepth > mergeT)
             {
               // another point at pixel i,j is in front of the current point by
               // a threshold, need to change z, otherwise moving to that
               // direction won't change the color value
-              if (curPointDepth - newDepth > mergeT)
-              {
-                if (!considerZ)
-                {
-                  continue;
-                }
-                scalar_t dx = (scalar_t(j) - curProjValues[0]);
-                scalar_t dy = (scalar_t(i) - curProjValues[1]);
-                scalar_t dx_3d = (scalar_t(j) - curProjValues[0]) / focalL /
-                                 imgWidth * 2 * curPointDepth;
-                scalar_t dy_3d = (scalar_t(i) - curProjValues[1]) / focalL /
-                                 imgHeight * 2 * curPointDepth;
-                assert(newDepth < curPointDepth);
-                scalar_t dz_3d = newDepth - curPointDepth;
-                scalar_t distance2_3d =
-                    eps_guard(dx_3d * dx_3d + dy_3d * dy_3d + dz_3d * dz_3d);
-                scalar_t distance2 = eps_guard(dx * dx + dy * dy);
-                didzv = dldI / distance2_3d * dz_3d;
-                // should rescale to screen space
-                didxv = dldI / distance2 * dx;
-                didyv = dldI / distance2 * dy;
-                assert(!isnan(didxv));
-                assert(!isnan(didyv));
-                if (logPoint)
-                {
-                  debugTensor[curPixelIdx * 8] = deltaI / distance2 * dx;
-                  debugTensor[curPixelIdx * 8 + 1] = deltaI / distance2 * dy;
-                  debugTensor[curPixelIdx * 8 + 2] = deltaI / distance2_3d * dz_3d;
-                }
 
-              } // don't need to change z
-              else
+              if (!considerZ)
               {
-                scalar_t dx = (scalar_t(j) - curProjValues[0]);
-                scalar_t dy = (scalar_t(i) - curProjValues[1]);
-                scalar_t distance2 = eps_guard(dx * dx + dy * dy);
-                // dIdx
-                didxv = dldI / distance2 * dx;
-                // dIdy
-                didyv = dldI / distance2 * dy;
-                assert(!isnan(didxv));
-                assert(!isnan(didyv));
-                if (logPoint)
-                {
-                  debugTensor[curPixelIdx * 8] = deltaI / distance2 * dx;
-                  debugTensor[curPixelIdx * 8 + 1] = deltaI / distance2 * dy;
-                  debugTensor[curPixelIdx * 8 + 2] = 0;
-                }
+                continue;
               }
+              scalar_t dx = (scalar_t(j) - curProjValues[0]);
+              scalar_t dy = (scalar_t(i) - curProjValues[1]);
+              scalar_t dx_3d = (scalar_t(j) - curProjValues[0]) / focalL /
+                                imgWidth * 2 * curPointDepth;
+              scalar_t dy_3d = (scalar_t(i) - curProjValues[1]) / focalL /
+                                imgHeight * 2 * curPointDepth;
+              assert(newDepth < curPointDepth);
+              scalar_t dz_3d = newDepth - curPointDepth;
+              scalar_t distance2_3d =
+                  eps_guard(dx_3d * dx_3d + dy_3d * dy_3d + dz_3d * dz_3d);
+              scalar_t distance2 = eps_guard(dx * dx + dy * dy);
+              scalar_t didzv_tmp = dldI / distance2_3d * dz_3d;
+              // should rescale to screen space
+              scalar_t didxv_tmp = dldI / distance2 * dx;
+              scalar_t didyv_tmp = dldI / distance2 * dy;
+              assert(!isnan(didxv));
+              assert(!isnan(didyv));
+              if (logPoint)
+              {
+                debugTensor[curPixelIdx * 8] = deltaI / distance2 * dx;
+                debugTensor[curPixelIdx * 8 + 1] = deltaI / distance2 * dy;
+                debugTensor[curPixelIdx * 8 + 2] = deltaI / distance2_3d * dz_3d;
+              }
+              if (dldI < 0.0)
+              {
+                didxv = didxv_tmp;
+                didyv = didyv_tmp;
+                didzv = didzv_tmp;
+              } // don't need to change z
+            }
+            else
+            {
+              scalar_t dx = (scalar_t(j) - curProjValues[0]);
+              scalar_t dy = (scalar_t(i) - curProjValues[1]);
+              scalar_t distance2 = eps_guard(dx * dx + dy * dy);
+              // dIdx
+              scalar_t didxv_tmp = dldI / distance2 * dx;
+              // dIdy
+              scalar_t didyv_tmp = dldI / distance2 * dy;
+              assert(!isnan(didxv));
+              assert(!isnan(didyv));
+              if (logPoint)
+              {
+                debugTensor[curPixelIdx * 8] = deltaI / distance2 * dx;
+                debugTensor[curPixelIdx * 8 + 1] = deltaI / distance2 * dy;
+                debugTensor[curPixelIdx * 8 + 2] = 0;
+              }
+              if (dldI < 0.0)
+              {
+                didxv = didxv_tmp;
+                didyv = didyv_tmp;
+              } // don't need to change z
             }
           }
           // pixel inside splat
@@ -409,31 +416,34 @@ __global__ void visibility_debug_backward_kernel(
                 deltaI += (newColors[c] - curPixelValues[c]);
               }
 
+              // dIdp = (dIdp+) + (dIdp-)
+              scalar_t dx = (scalar_t(j) - curProjValues[0]);
+              scalar_t dy = (scalar_t(i) - curProjValues[1]);
+              scalar_t distance = sqrt(eps_guard(dx * dx + dy * dy));
+              scalar_t rx = curProjValues[0] - xmin;
+              scalar_t ry = curProjValues[1] - ymin;
+              assert(rx > 0);
+              assert(ry > 0);
+              scalar_t r = max(rx, ry);
+              scalar_t didxv_tmp = dldI * dx / eps_guard((r + distance) * distance) +
+                                   dldI * dx / eps_guard((distance-r) * distance);
+              scalar_t didyv_tmp = dldI * dy / eps_guard((r + distance) * distance) +
+                                   dldI * dy / eps_guard((distance-r) * distance);
+              assert(!isnan(didxv));
+              assert(!isnan(didyv));
+              if (logPoint)
+              {
+                // if dx > 0, moving r+distance is in the positive direction, otherwise r+distance is in the negative direction
+                debugTensor[curPixelIdx * 8] = deltaI * dx / eps_guard((r + distance) * distance) -
+                                                deltaI * dx / eps_guard((r - distance) * distance);
+                debugTensor[curPixelIdx * 8 + 1] = deltaI * dy / eps_guard((r + distance) * distance) -
+                                                    deltaI * dy / eps_guard((r -distance) * distance);
+                debugTensor[curPixelIdx * 8 + 2] = 0;
+              }
               if (dldI < 0)
               {
-                // dIdp = (dIdp+) + (dIdp-)
-                scalar_t dx = (scalar_t(j) - curProjValues[0]);
-                scalar_t dy = (scalar_t(i) - curProjValues[1]);
-                scalar_t distance = sqrt(eps_guard(dx * dx + dy * dy));
-                scalar_t rx = curProjValues[0] - xmin;
-                scalar_t ry = curProjValues[1] - ymin;
-                assert(rx > 0);
-                assert(ry > 0);
-                scalar_t r = max(rx, ry);
-                didxv = dldI * dx / eps_guard((r + distance) * distance) +
-                        dldI * dx / eps_guard((distance - r) * distance);
-                didyv = dldI * dy / eps_guard((r + distance) * distance) +
-                        dldI * dy / eps_guard((distance - r) * distance);
-                assert(!isnan(didxv));
-                assert(!isnan(didyv));
-                if (logPoint)
-                {
-                  debugTensor[curPixelIdx * 8] = deltaI * dx / eps_guard((r + distance) * distance) +
-                                                 deltaI * dx / eps_guard((distance - r) * distance);
-                  debugTensor[curPixelIdx * 8 + 1] = deltaI * dy / eps_guard((r + distance) * distance) +
-                                                     deltaI * dy / eps_guard((distance - r) * distance);
-                  debugTensor[curPixelIdx * 8 + 2] = 0;
-                }
+                didxv = didxv_tmp;
+                didyv = didyv_tmp;
               }
             } // endif (curRhos[curK] > 0)
             // point is not visible:
@@ -940,22 +950,22 @@ __global__ void visibility_reference_backward_kernel(
               dL += curColorGrad[c];
               // deltaI += (newColors[c] - curPixelValues[c]);
             }
+            // another point at pixel i,j is in front of the current point by
+            // a threshold, need to change z, otherwise moving to that
+            // direction won't change the color value
+            // [dIdx;dIdy] = Ga*exp(-dTMd)(-2Md)
+            // dIdz = Ga*exp(-dTMd)(-2Md)
+            const scalar_t dx = (scalar_t(j) - curProjValues[0]);
+            const scalar_t dy = (scalar_t(i) - curProjValues[1]);
+            const scalar_t m11 = curMs[0];
+            const scalar_t m12 = curMs[1];
+            const scalar_t m21 = curMs[2];
+            const scalar_t m22 = curMs[3];
+            scalar_t didxv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m11 * dx + m12 * dy);
+            scalar_t didyv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m21 * dx + m22 * dy);
+            scalar_t didzv_tmp = 0;
             if (dldI < 0.0)
             {
-              // another point at pixel i,j is in front of the current point by
-              // a threshold, need to change z, otherwise moving to that
-              // direction won't change the color value
-              // [dIdx;dIdy] = Ga*exp(-dTMd)(-2Md)
-              // dIdz = Ga*exp(-dTMd)(-2Md)
-              const scalar_t dx = (scalar_t(j) - curProjValues[0]);
-              const scalar_t dy = (scalar_t(i) - curProjValues[1]);
-              const scalar_t m11 = curMs[0];
-              const scalar_t m12 = curMs[1];
-              const scalar_t m21 = curMs[2];
-              const scalar_t m22 = curMs[3];
-              didxv = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m11 * dx + m12 * dy);
-              didyv = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m21 * dx + m22 * dy);
-              didzv = 0;
               if (curPointDepth - newDepth > mergeT)
               {
                 scalar_t dz = newDepth - curPointDepth;
@@ -963,13 +973,13 @@ __global__ void visibility_reference_backward_kernel(
               }
               if (logPoint)
               {
-                debugTensor[curPixelIdx * 8] = didxv;
-                debugTensor[curPixelIdx * 8 + 1] = didyv;
-                debugTensor[curPixelIdx * 8 + 2] = didzv;
+                debugTensor[curPixelIdx * 8] = didxv_tmp;
+                debugTensor[curPixelIdx * 8 + 1] = didyv_tmp;
+                debugTensor[curPixelIdx * 8 + 2] = didzv_tmp;
               }
-              didxv = didxv * dL;
-              didyv = didyv * dL;
-              didzv = didzv * dL;
+              didxv = didxv_tmp * dL;
+              didyv = didyv_tmp * dL;
+              didzv = didzv_tmp * dL;
             }
           }
           // pixel inside splat
@@ -989,26 +999,26 @@ __global__ void visibility_reference_backward_kernel(
                 // deltaI += (newColors[c] - curPixelValues[c]);
               }
 
+              scalar_t dx = (scalar_t(j) - curProjValues[0]);
+              scalar_t dy = (scalar_t(i) - curProjValues[1]);
+              scalar_t m11 = curMs[0];
+              scalar_t m12 = curMs[1];
+              scalar_t m21 = curMs[2];
+              scalar_t m22 = curMs[3];
+              scalar_t didxv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m11 * dx + m12 * dy);
+              scalar_t didyv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m21 * dx + m22 * dy);
+              scalar_t didzv_tmp = 0;
+              if (logPoint)
+              {
+                debugTensor[curPixelIdx * 8] = didxv_tmp;
+                debugTensor[curPixelIdx * 8 + 1] = didyv_tmp;
+                debugTensor[curPixelIdx * 8 + 2] = didzv_tmp;
+              }
               if (dldI < 0)
               {
-                scalar_t dx = (scalar_t(j) - curProjValues[0]);
-                scalar_t dy = (scalar_t(i) - curProjValues[1]);
-                scalar_t m11 = curMs[0];
-                scalar_t m12 = curMs[1];
-                scalar_t m21 = curMs[2];
-                scalar_t m22 = curMs[3];
-                didxv = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m11 * dx + m12 * dy);
-                didyv = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m21 * dx + m22 * dy);
-                didzv = 0;
-                if (logPoint)
-                {
-                  debugTensor[curPixelIdx * 8] = didxv;
-                  debugTensor[curPixelIdx * 8 + 1] = didyv;
-                  debugTensor[curPixelIdx * 8 + 2] = didzv;
-                }
-                didxv = didxv * dL;
-                didyv = didyv * dL;
-                didzv = didzv * dL;
+                didxv = didxv_tmp * dL;
+                didyv = didyv_tmp * dL;
+                didzv = didzv_tmp * dL;
               }
             } // endif (curRhos[curK] > 0)
             // point is not visible:
