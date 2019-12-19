@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 from pytorch_points.network import operations
 from pytorch_points.utils.pc_utils import save_ply, read_ply
+from pytorch_points.utils.pytorch_utils import saved_variables
 from ..utils.mathHelper import dot, div, mul, det22, normalize, mm, inverse22, inverse33
 from ..utils.matrixConstruction import convertWorldToCameraTransform, batchLookAt, batchAffineMatrix
 from ..cuda import rasterizeDSS, rasterizeRBF, guided_scatter_maps
@@ -24,13 +25,6 @@ modifiers = ["localPoints",
              "sunColors",
              "ambientLight",
              ]
-
-saved_variables = {}
-
-def save_grad(name):
-    def hook(grad):
-        saved_variables[name] = grad.cpu()
-    return hook
 
 def _check_values(tensor):
     return not (torch.any(torch.isnan(tensor)) or torch.any(torch.isinf(tensor)))

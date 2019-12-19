@@ -1,7 +1,7 @@
 import torch
+from pytorch_points.utils.pytorch_utils import saved_variables
 from .rasterize_forward import _guided_scatter_maps, _scatter_maps, _gather_maps, _compute_visibility_maps
 from .rasterize_backward import _visibility_backward, _visibility_reference_backward, _visibility_debug_backward
-from ..core.renderer import saved_variables
 
 guided_scatter_maps = _guided_scatter_maps
 scatter_maps =  _scatter_maps
