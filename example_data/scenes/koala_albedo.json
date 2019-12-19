@@ -1,0 +1,83 @@
+{
+    "cmdLineArgs": {
+        "name": "kangaroo2koala",
+        "cycles": 10,
+        "Vrk_h": 0.02,
+        "camFocalLength": 9,
+        "camOffset": 22,
+        "height": 256,
+        "width": 256,
+        "backwardLocalSize": 128,
+        "backwardLocalSizeDecay": 0.95,
+        "mergeTopK": 3,
+        "projectionRadius": 0.1,
+        "projectionWeight": 0.05,
+        "projectionFreq": 2,
+        "repulsionRadius": 0.02,
+        "repulsionWeight": 0.03,
+        "repulsionFreq": 5,
+        "cutOffThreshold": 1.5,
+        "learningRates": [5000, 1],
+        "modifiers": [
+            "localNormals",
+            "localPoints"
+        ],
+        "steps": [25, 15]
+    },
+    "finetuneArgs": {
+        "Vrk_h": 0.02,
+        "cutOffThreshold": 2,
+        "backwardLocalSize": 96,
+        "projectionRadius": 0.1,
+        "projectionWeight": 0.02,
+        "projectionFreq": 1,
+        "repulsionRadius": 0.02,
+        "repulsionWeight": 0.02,
+        "repulsionFreq": 1,
+        "steps": [20, 5],
+        "learningRates": [2000, 0.1]
+    },
+    "name": "koala",
+    "ambient-light-color": [
+        0.9,
+        0.9,
+        0.9
+    ],
+    "cameras": [
+        {
+            "type": "pinhole",
+            "near": 0.01,
+            "far": 1000000,
+            "width": 256,
+            "height": 256,
+            "focalLength": 12,
+            "principlePoint": [
+                0,
+                0
+            ],
+            "lookAt": {
+                "from": [
+                    -15,
+                    15,
+                    5
+                ],
+                "to": [
+                    0,
+                    0,
+                    0
+                ],
+                "up": [
+                    0,
+                    0,
+                    1
+                ]
+            }
+        }
+    ],
+    "cloud": {
+        "shading": "albedo",
+        "backfaceCulling": true,
+        "scale": 4,
+        "points": "../pointclouds/Koala_V10k.ply"
+    }
+}

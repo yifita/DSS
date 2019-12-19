@@ -1,6 +1,7 @@
 import torch
 from .rasterize_forward import _guided_scatter_maps, _scatter_maps, _gather_maps, _compute_visibility_maps
-from .rasterize_backward import _visibility_backward, _visibility_reference_backward
+from .rasterize_backward import _visibility_backward, _visibility_reference_backward, _visibility_debug_backward
+from ..core.renderer import saved_variables
 
 guided_scatter_maps = _guided_scatter_maps
 scatter_maps =  _scatter_maps
@@ -308,12 +309,20 @@ class RasterizeAutograd(torch.autograd.Function):
                                                              gradPixels, pointIdxMap, rhoMap, WsMap, depthMap, isBehind,
                                                              pixels, boundingBoxes, projPoints, Ws, depthValues, rhoValues, dIdp, dIdz)
             dIdp, dIdz = outputs
-            # outputs = rasterize_backward.visibility_debug_backward(mergeThreshold, focalLength, considerZ,
+            # outputs = _visibility_debug_backward(mergeThreshold, focalLength, considerZ,
             #                                                        localHeight, localWidth, 0,
             #                                                        gradPixels, pointIdxMap, rhoMap, WsMap, depthMap, isBehind,
             #                                                        pixels, boundingBoxes, projPoints, Ws, depthValues, rhoValues, dIdp, dIdz)
+            # dIdp, dIdz, debugTensor = outputs
+
             dIdcam = torch.zeros_like(cameraPoints)
             dIdcam[:, :, 2] = dIdz
+            # saved_variables["dI"] = gradPixels.detach().cpu()
+            # saved_variables["dIdp"] = saved_variables["dIdp"].scatter_(1, saved_variables["renderable_idx"].expand(-1, -1, dIdp.shape[-1]),
+            #                                                            dIdp.cpu().detach())
+            # saved_variables["projPoints"] = saved_variables["projPoints"].scatter_(1, saved_variables["renderable_idx"].expand(-1,-1,dIdp.shape[-1]),
+            #                                                                        projPoints.cpu().detach())
+            # saved_variables["dIdpMap"] = debugTensor[:,:,:,:2].cpu().detach()
         else:
             dIdp = dIdcam = None
 

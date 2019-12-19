@@ -10,7 +10,7 @@ from DSS.options.deformation_options import DeformationOptions
 from DSS.core.renderer import saved_variables as tmp_saved_v
 
 
-def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
+def trainShapeOnImage(scene, refScene, opt, baseline=False):
     expr_dir = os.path.join(opt.output, opt.name)
     if not os.path.isdir(expr_dir):
         os.makedirs(expr_dir)
@@ -33,18 +33,17 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
             t = tb
             with torch.no_grad():
                 trainer.create_reference(refScene)
-                if not benchmark:
-                    writeScene(refScene, os.path.join(
-                        expr_dir, 't%03d_scene_gt.json' % t))
-                    writeCameras(refScene, os.path.join(
-                        expr_dir, 't%03d_cameras.ply' % t))
-                    for i, gt in enumerate(trainer.groundtruths):
-                        saveAsPng(gt.cpu()[0], os.path.join(
-                            expr_dir, 't%03d_cam%d_gt.png' % (t, i)))
+                writeScene(refScene, os.path.join(
+                    expr_dir, 't%03d_scene_gt.json' % t))
+                writeCameras(refScene, os.path.join(
+                    expr_dir, 't%03d_cameras.ply' % t))
+                for i, gt in enumerate(trainer.groundtruths):
+                    saveAsPng(gt.cpu()[0], os.path.join(
+                        expr_dir, 't%03d_cam%d_gt.png' % (t, i)))
                 trainer.initiate_cycle()
 
             for t in range(tb, te):
-                if t % logInterval == 0 and not benchmark:
+                if t % logInterval == 0:
                     writeScene(scene, os.path.join(
                         expr_dir, 't%03d_scene.json' % t), os.path.join(expr_dir, "t%03d.ply" % t))
 
@@ -60,19 +59,18 @@ def trainShapeOnImage(scene, refScene, opt, baseline=False, benchmark=False):
 
 
 
-                if t % logInterval == 0 and not benchmark:
+                if t % logInterval == 0:
                     for i, prediction in enumerate(trainer.predictions):
                         saveAsPng(prediction.detach().cpu()[0], os.path.join(
                             expr_dir, 't%03d_cam%d' % (t, i) + ".png"))
 
-                if not benchmark:
-                    loss_str = ",".join(
-                        ["%.3f" % v for v in trainer.loss_image])
-                    reg_str = ",".join(["%.3f" % v for v in trainer.loss_reg])
-                    entries = [trainer.modifier] + [loss_str] + [reg_str]
-                    loss_log.write(",".join(entries)+"\n")
-                    print("{:03d} {}: lr {} loss ({}) \n         :       reg ({})".format(
-                        t, trainer.modifier, trainer.lr, loss_str, reg_str))
+                loss_str = ",".join(
+                    ["%.3f" % v for v in trainer.loss_image])
+                reg_str = ",".join(["%.3f" % v for v in trainer.loss_reg])
+                entries = [trainer.modifier] + [loss_str] + [reg_str]
+                loss_log.write(",".join(entries)+"\n")
+                print("{:03d} {}: lr {} loss ({}) \n         :       reg ({})".format(
+                    t, trainer.modifier, trainer.lr, loss_str, reg_str))
 
             trainer.finish_cycle()
 
@@ -102,4 +100,4 @@ if __name__ == "__main__":
     scene.ambientLight = refScene.ambientLight
 
     trainShapeOnImage(scene, refScene, opt,
-                      baseline=opt.baseline, benchmark=opt.benchmark)
+                      baseline=opt.baseline)

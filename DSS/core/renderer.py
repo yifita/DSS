@@ -165,6 +165,7 @@ class DSS(torch.nn.Module):
         super(DSS, self).__init__()
         if scene is None:
             scene = Scene()
+        self.opt = opt
         self.lowPassBandWidth = 1  # in screen space
         self.mergeTopK = opt.mergeTopK
         self.considerZ = opt.considerZ
@@ -846,12 +847,15 @@ class DSS(torch.nn.Module):
             print("No renderable points")
             return None
         batchSize, numTotalPoints, _ = self.cameraPoints.shape
-        # saved_variables["renderable_idx"] = self.renderable_indices.detach().cpu()
-        # saved_variables["dIdp"] = torch.zeros([batchSize, numTotalPoints, 3], dtype=self.cameraPoints.dtype)
-        # saved_variables["dIdpMap"] = torch.zeros((self.projPoints.shape[0], self.camera.height, self.camera.width, 2), dtype=self.projPoints)
-        # saved_variables["projPoints"] = self.camera.projectPoints(self.cameraPoints)
 
         self._projPoints = self.camera.projectPoints(self._cameraPoints)
+
+        if self.opt.verbose:
+            saved_variables["renderable_idx"] = self.renderable_indices.detach().cpu()
+            saved_variables["dIdp"] = torch.zeros([batchSize, numTotalPoints, 3], dtype=self.cameraPoints.dtype)
+            saved_variables["dIdpMap"] = torch.zeros((self._projPoints.shape[0], self.camera.height, self.camera.width, 2), dtype=self._projPoints.dtype)
+            saved_variables["projPoints"] = self.camera.projectPoints(self.cameraPoints)
+
         Vr = self.computeVr(self._cameraPoints)
 
         result = self.computeRho(self._projPoints.detach(),

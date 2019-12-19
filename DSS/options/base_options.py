@@ -33,8 +33,8 @@ class BaseOptions():
                             nargs='+', default=[2000, 5])
         parser.add_argument('--clip', dest="clipGrad",
                             type=float, default=0.01, help='clip gradient')
-        parser.add_argument('--benchmark', action="store_true",
-                            help='benchmark performance')
+        parser.add_argument('--verbose', action="store_true",
+                            help='log gradients')
         parser.add_argument('--type', default="DSS", help="DSS or Baseline", choices=["DSS", "Baseline"])
         parser.add_argument('--width', type=int, default=256, help="image width")
         parser.add_argument('--height', type=int, default=256, help="image height")

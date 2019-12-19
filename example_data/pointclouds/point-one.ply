@@ -1,0 +1,15 @@
+ply
+format ascii 1.0
+comment Some example points for test renders
+element vertex 1
+property float x
+property float y
+property float z
+property float nx
+property float ny
+property float nz
+property uchar red
+property uchar green
+property uchar blue
+end_header
+0.0000 0.0000 0.0000 0.0000 0.0000 1.0000 200 200 200
