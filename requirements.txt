@@ -15,7 +15,7 @@ numpy=1.16.4
 pillow=5.4.1=py37h34e0f95_0
 pip=19.0.3=py37_0
 python=3.7.0=h6e4f718_3
-pytorch>=1.0.1
+pytorch=1.0.1
 readline=7.0=h7b6447c_5
 scikit-image=0.15.0=py37he1b5a44_0
 scikit-learn=0.20.3=py37ha8026db_1
