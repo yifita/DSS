@@ -1,0 +1,9 @@
+[submodule "pytorch_points"]
+	path = pytorch_points
+	url = https://github.com/yifita/pytorch_points.git
+[submodule "external/torch-batch-svd"]
+	path = external/torch-batch-svd
+	url = https://github.com/KinglittleQ/torch-batch-svd.git
+[submodule "external/torch_sampling"]
+	path = external/torch_sampling
+	url = https://github.com/LeviViana/torch_sampling.git
