@@ -280,5 +280,7 @@ scripts/renders
 
 mypy/
 
-
 .vscode
+
+data/
+exp/

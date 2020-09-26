@@ -56,6 +56,8 @@ scatter_maps_kernel(int batchSize, int numPoint, int imgWidth, int imgHeight,
 {
   // const int numPixels = imgWidth * imgHeight;
   // loop all points
+  // TODO instead of looping over points then pixels, loop over pixels only and write
+  // in points with cudasync?
   for (int b = blockIdx.x; b < batchSize; b += gridDim.x) {
     for (indice_t p = threadIdx.x + blockIdx.y * blockDim.x; p < numPoint;
          p += blockDim.x * gridDim.y) {
@@ -200,7 +202,7 @@ void compute_visiblity_maps_cuda(const at::Tensor &boundingBoxes,
                                  at::Tensor &pointIdxMap,
                                  at::Tensor &bbPositionMap,
                                  at::Tensor &depthMap) {
-  AT_CHECK(inPlane.dim() == 5);
+  TORCH_CHECK(inPlane.dim() == 5);
   const int batchSize = inPlane.size(0);
   const int numPoint = inPlane.size(1);
   const int bbHeight = inPlane.size(2);
@@ -223,10 +225,9 @@ void compute_visiblity_maps_cuda(const at::Tensor &boundingBoxes,
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, numPoint, imgWidth, imgHeight, bbWidth, bbHeight,
                 topK,
-                boundingBoxes.toType(bbPositionMap.scalar_type())
-                    .data<int64_t>(),
-                inPlane.data<scalar_t>(), pointIdxMap.data<int64_t>(),
-                bbPositionMap.data<int64_t>(), depthMap.data<scalar_t>());
+                boundingBoxes.data_ptr<int64_t>(),
+                inPlane.data_ptr<scalar_t>(), pointIdxMap.data_ptr<int64_t>(),
+                bbPositionMap.data_ptr<int64_t>(), depthMap.data_ptr<scalar_t>());
       }));
   cudaError_t err = cudaGetLastError();
   // cudaError_t err = cudaGetLastError();
@@ -263,8 +264,8 @@ at::Tensor gather_maps_cuda(const at::Tensor &data, const at::Tensor &indices,
         gather_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, numPoint, imgWidth, imgHeight, topK, channels,
-                indices.data<int64_t>(), data.data<scalar_t>(),
-                dv.to<scalar_t>(), output.data<scalar_t>());
+                indices.data_ptr<int64_t>(), data.data_ptr<scalar_t>(),
+                dv.to<scalar_t>(), output.data_ptr<scalar_t>());
       }));
   // cudaError_t err = cudaDeviceSynchronize();
   cudaError_t err = cudaGetLastError();
@@ -291,13 +292,13 @@ at::Tensor scatter_maps_cuda(const int64_t numPoint, const at::Tensor &src,
   // initialize with zeros
   auto dataGrad = at::zeros({batchSize, nP, channels}, src.options());
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  AT_DISPATCH_ALL_TYPES(
+  AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::Bool,
       src.scalar_type(), "scatter_maps_kernel", ([&] {
         scatter_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, nP, imgWidth, imgHeight, topK, channels,
-                src.data<scalar_t>(), indices.data<int64_t>(),
-                dataGrad.data<scalar_t>());
+                src.data_ptr<scalar_t>(), indices.data_ptr<int64_t>(),
+                dataGrad.data_ptr<scalar_t>());
       }));
   cudaError_t err = cudaDeviceSynchronize();
   // cudaError_t err = cudaGetLastError();
@@ -328,14 +329,15 @@ at::Tensor guided_scatter_maps_cuda(const int64_t numPoint,
   // initialize with zeros
   auto dataGrad = at::zeros({batchSize, nP, channels}, src.options());
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  AT_DISPATCH_ALL_TYPES(
+  AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::Bool,
       src.scalar_type(), "guided_scatter_maps_kernel", ([&] {
         guided_scatter_maps_kernel<scalar_t, int64_t>
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, nP, imgWidth, imgHeight, topK, channels,
-                src.data<scalar_t>(), indices.data<int64_t>(),
-                boundingBoxes.toType(indices.scalar_type()).data<int64_t>(),
-                dataGrad.data<scalar_t>());
+                src.data_ptr<scalar_t>(),
+                indices.data_ptr<int64_t>(),
+                boundingBoxes.data_ptr<int64_t>(),
+                dataGrad.data_ptr<scalar_t>());
       }));
   cudaError_t err = cudaDeviceSynchronize();
   // cudaError_t err = cudaGetLastError();

@@ -6,3 +6,4 @@ scikit-image
 opencv
 tensorboard
 point_cloud_utils
+cython

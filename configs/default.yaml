@@ -1,0 +1,155 @@
+name: "demo"
+data:
+  type: MVR
+  data_dir: "example_data"
+  data_dict: "data_dict.npz"
+  img_folder: image
+  mask_folder: mask
+  depth_folder: depth
+  img_extension: png
+  img_extension_input: jpg
+  mask_extension: png
+  depth_extension: exr
+  img_with_camera: true
+  img_with_mask: true
+  depth_range: [0.1, 25]
+  depth_from_visual_hull: false
+renderer:
+  is_neural_texture: False
+  renderer_type: DSS.core.renderer.SurfaceSplattingRenderer
+  renderer_params:
+    backface_culling: True
+  raster_type: DSS.core.rasterizer.SurfaceSplatting
+  raster_params:
+    points_per_pixel: !!int 5
+    cutoff_threshold: 0.5  # initialization
+    depth_merging_threshold: 0.02
+    Vrk_isotropic: true
+    radii_backward_scaler: 8
+    image_size: 512
+    points_per_pixel: 5
+    bin_size: null
+    max_points_per_bin: null
+    backward_rbf: false
+  compositor_type: pytorch3d.renderer.NormWeightedCompositor
+  composite_params: {}
+  lighting: 'from_data'
+  # 'from_data' | 'default'
+  # from_data: use ground truth lighting (in this case learn_colors should be false)
+  # default: use white ambient light, in this case learn_normals shoudl be false
+model:
+  type: combined
+  encoder: null
+  decoder: DSS.models.combined_modeling.Decoder
+  model_kwargs:
+    learn_points: true
+    learn_normals: true
+    learn_size: false
+    learn_colors: False
+    point_scale_range: [0.3, 1.5]
+    n_points_per_cloud: 8000
+    uniform_projection: True
+  decoder_kwargs:
+    activation: null
+    dropout: []
+    dropout_prob: 0.2
+    hidden_size: 512
+    n_layers: 8
+    latent_dropout: false
+    latent_in: []
+    norm_layers:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    out_dim: 4
+    weight_norm: true
+    xyz_in_all: false
+  encoder_kwargs: {}
+  texture: DSS.models.common.Texture
+  texture_kwargs:
+    dim: 3
+    use_normal: true
+    pos_encoding: true
+    num_frequencies: 4
+  depth_function_kwargs:
+    is_occupancy: True  # will only be used for occupancy net
+  c_dim: 256
+training:
+  out_dir:  exp
+  # loss when renderer to get predicted image
+  lambda_dr_rgb: 0.0
+  lambda_dr_silhouette: 0.0
+  lambda_occupied: 1.
+  lambda_freespace: 1.
+  lambda_rgb: 1.
+  lambda_depth: 0.
+  lambda_image_gradients: 0.
+  lambda_sparse_depth: 0.
+  lambda_normal: 0.05
+  lambda_dr_proj: 0.
+  lambda_dr_repel: 0.
+  lambda_eikonal: 0.
+  lambda_boundary: 0.
+  lambda_sparse_depth: 0.
+  reduction_method: sum
+  batch_size: 8
+  batch_size_val: 8
+  patch_size: 1
+  print_every: 10
+  checkpoint_every: 200
+  visualize_every: 10000
+  validate_every: 2000
+  backup_every: 50000
+  prune_every: -1
+  clip_grad: true
+  learning_rate: 0.0001
+  scheduler_milestones: [2000, 4000]
+  scheduler_gamma: 0.5
+  steps_n_points_dss: 500
+  steps_n_rays: 500
+  steps_dss_backward_radii: 100
+  gamma_n_points_dss: 1.0
+  gamma_n_rays: 1.0
+  gamma_dss_backward_radii: 0.99
+  model_selection_metric: chamfer
+  model_selection_mode: minimize
+  n_training_points: 1024
+  n_eval_points: 80000
+  n_workers: 0
+  logfile: train.log
+  sample_continuous: False
+  overwrite_visualization: true
+  multi_gpu: false
+  debug_every: 100
+  n_debug_points: 100
+  saliency_sampling: True
+generation:
+  batch_size: 1
+  vis_n_outputs: 30
+  generation_dir: generation
+  simplify_nfaces: null
+  resolution0: 32  # used for Multiresolution IsoSurface Extraction
+  refinement_step: 30
+  refine_max_faces: 10000
+  points_batch_size: 100000
+  with_colors: true
+  with_normals: true
+  mesh_extension: ply
+test:
+  eval_file_name: eval_meshes
+  threshold: 0.0
+  model_file: model_best.pt
+rendering:
+  render_dir: rendering
+  colors: rgb
+  resolution: [256, 256]
+  ray_sampling_accuracy: [1024, 1025]
+  extension: jpg
+  n_views: 1
+  n_start_view: 0
+  background: white

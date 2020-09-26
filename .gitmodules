@@ -7,3 +7,6 @@
 [submodule "external/torch_sampling"]
 	path = external/torch_sampling
 	url = https://github.com/LeviViana/torch_sampling.git
+[submodule "external/pypoisson"]
+	path = external/pypoisson
+	url = https://github.com/mmolero/pypoisson.git

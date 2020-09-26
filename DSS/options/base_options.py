@@ -1,7 +1,7 @@
 import argparse
 import os
 import torch
-import json
+import yaml
 
 
 class BaseOptions():
@@ -16,7 +16,8 @@ class BaseOptions():
         """Define the common options that are used in both training and test."""
         # basic parameters
         parser.add_argument('source', metavar="source", nargs='?',
-                            default="example_data/scenes/sphere.json", help='json file defining scenes initialization')
+                            default="example_data/scenes/sphere.json",
+                            help='json|config file defining scenes initialization')
         parser.add_argument('-t', "--target", dest="ref", nargs='?',
                             default="example_data/scenes/bunny.json", help='reference scene.')
         parser.add_argument('-d', '--device', dest='device', default='cuda:0',
@@ -34,15 +35,22 @@ class BaseOptions():
         parser.add_argument('--clip', dest="clipGrad",
                             type=float, default=0.01, help='clip gradient')
         parser.add_argument('--verbose', action="store_true",
-                            help='log gradients')
-        parser.add_argument('--type', default="DSS", help="DSS or Baseline", choices=["DSS", "Baseline"])
-        parser.add_argument('--width', type=int, default=256, help="image width")
-        parser.add_argument('--height', type=int, default=256, help="image height")
+                            help='more prints')
+        parser.add_argument('--debug', action="store_true",
+                            help="log debugging information")
+        parser.add_argument('--type', default="DSS",
+                            help="DSS or Baseline", choices=["DSS", "Baseline"])
+        parser.add_argument('--width', type=int,
+                            default=256, help="image width")
+        parser.add_argument('--height', type=int,
+                            default=256, help="image height")
         parser.add_argument('--sv', default=128, help="view scale")
         parser.add_argument('-k', '--topK', dest="mergeTopK",
                             type=int, default=5, help='topK for merging depth')
         parser.add_argument('-mT', '--mergeThreshold', type=float,
                             default=0.05, help='threshold for merging depth')
+        parser.add_argument('--img-loss-type',
+                            choices=["SMAPE", "L1", "L2"], default="SMAPE")
         parser.add_argument('--no-z', dest='considerZ', action="store_false",
                             help='do not optimize Z in backward (default false)')
         parser.add_argument('-rR', '--repulsionRadius', type=float,
@@ -73,9 +81,15 @@ class BaseOptions():
                             default=15, help='focal length for generated cameras')
         parser.add_argument('--cutOffThreshold',
                             type=float, default=1, help='cutoff threshold')
-        parser.add_argument('--Vrk_h', type=float, default=0.02, help='standard deviation for V_r^h in EWA')
+<<<<<<< HEAD
+        parser.add_argument('--Vrk_h', type=float, default=0.02,
+                            help='standard deviation for V_r^h in EWA')
         parser.add_argument('--backwardLocalSize',
-                            type=int, default=128, help='window size for computing pixel loss')
+=======
+        parser.add_argument('--Vrk_h', type=float, default=0.02, help='standard deviation for V_r^h in EWA')
+        parser.add_argument('--backwardLocalSize', default=128,
+>>>>>>> master
+                            type=int, help='window size for computing pixel loss')
         parser.add_argument('--backwardLocalSizeDecay', default=0.9,
                             type=float, help='decay for backward window size after each cycle')
         parser.add_argument('--baseline', action="store_true",
@@ -100,6 +114,7 @@ class BaseOptions():
             self.parser = parser
             # get the basic options
             opt, _ = self.parser.parse_known_args()
+            return opt
 
         return self.parser.parse_args()
 
@@ -111,9 +126,15 @@ class BaseOptions():
         """
         message = ''
         message += '----------------- Options ---------------\n'
+        opt_dict = {}
         for k, v in sorted(vars(opt).items()):
+            opt_dict[str(k)] = str(v)
             comment = ''
             default = self.parser.get_default(k)
+            if str(k) == "device":
+                opt_dict[str(k)] = str(v)
+            else:
+                opt_dict[k] = v
             if v != default:
                 comment = '\t[default: %s]' % str(default)
             message += '{:>25}: {:<30}{}\n'.format(str(k), str(v), comment)
@@ -127,6 +148,9 @@ class BaseOptions():
         with open(file_name, 'wt') as opt_file:
             opt_file.write(message)
             opt_file.write('\n')
+        opt_file_name = os.path.join(expr_dir, 'opt.yaml')
+        with open(opt_file_name, 'wt') as opt_file:
+            yaml.dump(opt_dict, opt_file)
 
     def parse(self):
         """Parse our options, create checkpoints directory suffix, and set up gpu device."""

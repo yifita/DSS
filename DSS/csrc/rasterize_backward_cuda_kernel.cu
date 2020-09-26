@@ -43,7 +43,7 @@ __device__ void after_removal(const int numColors, const int topK,
                               const int curK, const scalar_t depthThres,
                               const scalar_t *depthList,
                               const indice_t *curPointList, // topK
-                              const uint8_t *curIsBehind,   // topK
+                              const bool *curIsBehind,   // topK
                               const scalar_t *wsList,       // topKx3
                               const scalar_t *rhoList,      // topKx1
                               const scalar_t *curPixel,     // numColors
@@ -62,7 +62,7 @@ __device__ void after_removal(const int numColors, const int topK,
   int numVisible = 0;
   for (size_t k = 0; k < topK; k++)
   {
-    if (curIsBehind[k] == 0)
+    if (!curIsBehind[k])
       ++numVisible;
   }
   // if it's the only visible point, then removing it will reveal the
@@ -140,7 +140,7 @@ __device__ void
 after_addition(const int numColors, const int topK, const scalar_t rho,
                const scalar_t *ws, const scalar_t pointDepth,
                const scalar_t depthThres, const scalar_t *depthList,
-               const uint8_t *curIsBehind, // topK
+               const bool *curIsBehind, // topK
                const scalar_t *wsList,     // topKx3
                const scalar_t *rhoList,    // topKx1
                const scalar_t *curPixel,   // numColors
@@ -150,7 +150,7 @@ after_addition(const int numColors, const int topK, const scalar_t rho,
   scalar_t sumRho = rho;
   for (size_t k = 0; k < topK; k++)
   {
-    if (curIsBehind[k] > 0 ||
+    if (curIsBehind[k] ||
         (depthList[k] - depthThres) >
             pointDepth)
     { // || (depthList[k] - depthThres) > pointDepth
@@ -170,7 +170,7 @@ after_addition(const int numColors, const int topK, const scalar_t rho,
   {
     for (size_t c = 0; c < numColors; c++)
     {
-      if (curIsBehind[k] > 0 ||
+      if (curIsBehind[k] ||
           (depthList[k] - depthThres) >
               pointDepth)
       { // || (depthList[k] - depthThres) > pointDepth
@@ -191,7 +191,7 @@ __device__ void after_drawing_closer(const int numColors, const int topK,
                                      const scalar_t *wsList,    // topKx3
                                      const scalar_t *rhoList,   // topKx1
                                      const scalar_t *depthList, // topK
-                                     const uint8_t *isBehind,   // topK
+                                     const bool *isBehind,   // topK
                                      scalar_t *newColors, scalar_t *newDepth)
 {
   scalar_t curRho = rhoList[curK];
@@ -200,7 +200,7 @@ __device__ void after_drawing_closer(const int numColors, const int topK,
   scalar_t sumRho = curRho;
   for (size_t k = 0; k < topK; k++)
   {
-    if (isBehind[k] > 0)
+    if (isBehind[k])
     {
       break;
     }
@@ -217,7 +217,7 @@ __device__ void after_drawing_closer(const int numColors, const int topK,
   {
     for (size_t c = 0; c < numColors; c++)
     {
-      if (isBehind[k] > 0)
+      if (isBehind[k])
       {
         break;
       }
@@ -249,13 +249,13 @@ __global__ void visibility_debug_backward_kernel(
     const int localHeight, const int localWidth, const int topK, const int PN,
     const int projDim, const int WDim, const scalar_t focalL,
     const scalar_t mergeT, const bool considerZ,
-    const indice_t verboseLogIdx,
+    const indice_t *__restrict__ verboseLogIdx, // Bx1
     const scalar_t *__restrict__ colorGrads,    // BxHxWx3 gradient from output
     const indice_t *__restrict__ pointIdxMap,   // BxHxWxtopK
     const scalar_t *__restrict__ rhoMap,        // BxHxWxtopK
     const scalar_t *__restrict__ wsMap,         // BxHxWxtopKx3
     const scalar_t *__restrict__ depthMap,      // BxHxWxtopK
-    const uint8_t *__restrict__ isBehind,       // BxHxWxtopK
+    const bool *__restrict__ isBehind,       // BxHxWxtopK
     const scalar_t *__restrict__ pixelValues,   // BxHxWx3
     const indice_t *__restrict__ boundingBoxes, // BxNx4 xmin ymin xmax ymax
     const scalar_t *__restrict__ projPoints,    // BxNx[2or3], xy1
@@ -273,11 +273,12 @@ __global__ void visibility_debug_backward_kernel(
   // loop all points
   for (int b = blockIdx.x; b < batchSize; b += gridDim.x)
   {
+    const indice_t batchLogIdx = verboseLogIdx[b];
     for (indice_t p = threadIdx.x + blockDim.x * blockIdx.y; p < PN;
          p += blockDim.x * gridDim.y)
     {
       const indice_t curPointIdx = b * PN + p;
-      const bool logPoint = (curPointIdx == verboseLogIdx);
+      const bool logPoint = (curPointIdx == batchLogIdx);
       // skip point (gradient=0) if mask == 1 (i.e. point is good)
       scalar_t xmin = scalar_t(boundingBoxes[curPointIdx * 4]);
       scalar_t ymin = scalar_t(boundingBoxes[curPointIdx * 4 + 1]);
@@ -289,6 +290,7 @@ __global__ void visibility_debug_backward_kernel(
       scalar_t *dIdy = dIdp + curPointIdx * projDim + 1;
       scalar_t *curdIdz = dIdz + curPointIdx;
       const scalar_t rhov = rhoValues[curPointIdx];
+      // local optimization window
       const int bH =
           min(max(0, int(curProjValues[1] - localHeight / 2)), imgHeight);
       const int eH =
@@ -312,7 +314,7 @@ __global__ void visibility_debug_backward_kernel(
           const scalar_t *curPixelValues = pixelValues + curPixelIdx * WDim;
           const scalar_t *curDepthList = depthMap + curPixelIdx * topK;
           // const scalar_t curClosestDepth = depthMap[curPixelIdx * topK];
-          const uint8_t *curIsBehind = isBehind + curPixelIdx * topK;
+          const bool *curIsBehind = isBehind + curPixelIdx * topK;
           const scalar_t curPointDepth = depthValues[curPointIdx];
           // is this pixel inside the splat?
           int curK;
@@ -341,7 +343,6 @@ __global__ void visibility_debug_backward_kernel(
               // another point at pixel i,j is in front of the current point by
               // a threshold, need to change z, otherwise moving to that
               // direction won't change the color value
-
               if (!considerZ)
               {
                 continue;
@@ -404,7 +405,7 @@ __global__ void visibility_debug_backward_kernel(
           else
           {
             // is the current point shown?
-            if (curIsBehind[curK] < 1)
+            if (!curIsBehind[curK])
             {
               // dIdx dIdy and dIdz-
               after_removal(WDim, topK, curK, mergeT, curDepthList, curIdxList,
@@ -507,7 +508,7 @@ __global__ void visibility_backward_kernel(
     const scalar_t *__restrict__ rhoMap,        // BxHxWxtopK
     const scalar_t *__restrict__ wsMap,         // BxHxWxtopKx3
     const scalar_t *__restrict__ depthMap,      // BxHxWxtopK
-    const uint8_t *__restrict__ isBehind,       // BxHxWxtopK
+    const bool  *__restrict__ isBehind,       // BxHxWxtopK
     const scalar_t *__restrict__ pixelValues,   // BxHxWx3
     const indice_t *__restrict__ boundingBoxes, // BxNx4 xmin ymin xmax ymax
     const scalar_t *__restrict__ projPoints,    // BxNx[2or3], xy1
@@ -558,7 +559,7 @@ __global__ void visibility_backward_kernel(
           const scalar_t *curPixelValues = pixelValues + curPixelIdx * WDim;
           const scalar_t *curDepthList = depthMap + curPixelIdx * topK;
           // const scalar_t curClosestDepth = depthMap[curPixelIdx * topK];
-          const uint8_t *curIsBehind = isBehind + curPixelIdx * topK;
+          const bool *curIsBehind = isBehind + curPixelIdx * topK;
           const scalar_t curPointDepth = depthValues[curPointIdx];
           // is this pixel inside the splat?
           int curK;
@@ -627,7 +628,7 @@ __global__ void visibility_backward_kernel(
           else
           {
             // is the current point shown?
-            if (curIsBehind[curK] < 1)
+            if (!curIsBehind[curK])
             {
               // dIdx dIdy and dIdz-
               after_removal(WDim, topK, curK, mergeT, curDepthList, curIdxList,
@@ -735,21 +736,20 @@ visibility_backward_cuda(const double focalLength, const double mergeThres,
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, imgHeight, imgWidth, localHeight, localWidth, topK,
                 PN, projDim, WDim, focalLength, mergeThres, considerZ,
-                colorGrads.data<scalar_t>(),  // BxHxWx3
-                pointIdxMap.data<int64_t>(),  // BxHxWxtopK
-                rhoMap.data<scalar_t>(),      // BxHxWxtopK
-                wsMap.data<scalar_t>(),       // BxHxWxtopKx3
-                depthMap.data<scalar_t>(),    // BxHxWxtopK
-                isBehind.data<uint8_t>(),     // BxHxWxtopK
-                pixelValues.data<scalar_t>(), // BxHxWx3
-                boundingBoxes.toType(pointIdxMap.scalar_type())
-                    .data<int64_t>(),         // BxNx4 xmin ymin xmax ymax
-                projPoints.data<scalar_t>(),  // BxNx[2or3], xy1
-                pointColors.data<scalar_t>(), // BxNx3
-                depthValues.data<scalar_t>(), // BxNx1
-                rhoValues.data<scalar_t>(),   // BxNx1
-                dIdp.data<scalar_t>(),        // BxNx2 gradients for projX,Y
-                dIdz.data<scalar_t>()         // BxNx1
+                colorGrads.data_ptr<scalar_t>(),  // BxHxWx3
+                pointIdxMap.data_ptr<int64_t>(),  // BxHxWxtopK
+                rhoMap.data_ptr<scalar_t>(),      // BxHxWxtopK
+                wsMap.data_ptr<scalar_t>(),       // BxHxWxtopKx3
+                depthMap.data_ptr<scalar_t>(),    // BxHxWxtopK
+                isBehind.data_ptr<bool>(),     // BxHxWxtopK
+                pixelValues.data_ptr<scalar_t>(), // BxHxWx3
+                boundingBoxes.data_ptr<int64_t>(),         // BxNx4 xmin ymin xmax ymax
+                projPoints.data_ptr<scalar_t>(),  // BxNx[2or3], xy1
+                pointColors.data_ptr<scalar_t>(), // BxNx3
+                depthValues.data_ptr<scalar_t>(), // BxNx1
+                rhoValues.data_ptr<scalar_t>(),   // BxNx1
+                dIdp.data_ptr<scalar_t>(),        // BxNx2 gradients for projX,Y
+                dIdz.data_ptr<scalar_t>()         // BxNx1
             );                                // BxHxWx8
       }));
   output.push_back(dIdp);
@@ -768,7 +768,8 @@ visibility_backward_cuda(const double focalLength, const double mergeThres,
 std::vector<at::Tensor>
 visibility_debug_backward_cuda(const double focalLength, const double mergeThres,
                                const bool considerZ, const int localHeight,
-                               const int localWidth, const int logIdx,
+                               const int localWidth,
+                               const at::Tensor &logIdx,        // Bx1
                                const at::Tensor &colorGrads,    // BxHxWxWDim
                                const at::Tensor &pointIdxMap,   // BxHxWxtopK
                                const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -788,9 +789,8 @@ visibility_debug_backward_cuda(const double focalLength, const double mergeThres
   const int imgWidth = pointIdxMap.size(2);
   const int topK = pointIdxMap.size(3);
   const int PN = projPoints.size(1);
-  const int WDim = pointColors.size(2);
+  CHECK_EQ(logIdx.numel(), batchSize);
   CHECK(projPoints.size(2) == 2 || projPoints.size(2) == 3);
-  const int projDim = projPoints.size(2);
   CHECK_EQ(pointColors.size(1), PN);
   CHECK(colorGrads.size(-1) == wsMap.size(-1) &&
         wsMap.size(-1) == pixelValues.size(-1) &&
@@ -799,7 +799,9 @@ visibility_debug_backward_cuda(const double focalLength, const double mergeThres
   unsigned int n_threads, n_blocks;
   n_threads = opt_n_threads(PN);
   n_blocks = min(32, (PN * batchSize + n_threads - 1) / n_threads);
-  const int64_t verboseLogIdx = int64_t(logIdx);
+  const int WDim = pointColors.size(2);
+  const int projDim = projPoints.size(2);
+
   // initialize with zeros
   dIdp.zero_();
   dIdz.zero_();
@@ -820,23 +822,22 @@ visibility_debug_backward_cuda(const double focalLength, const double mergeThres
             <<<dim3(batchSize, n_blocks, 1), n_threads, 0, stream>>>(
                 batchSize, imgHeight, imgWidth, localHeight, localWidth, topK,
                 PN, projDim, WDim, focalLength, mergeThres, considerZ,
-                verboseLogIdx,
-                colorGrads.data<scalar_t>(),  // BxHxWx3
-                pointIdxMap.data<int64_t>(),  // BxHxWxtopK
-                rhoMap.data<scalar_t>(),      // BxHxWxtopK
-                wsMap.data<scalar_t>(),       // BxHxWxtopKx3
-                depthMap.data<scalar_t>(),    // BxHxWxtopK
-                isBehind.data<uint8_t>(),     // BxHxWxtopK
-                pixelValues.data<scalar_t>(), // BxHxWx3
-                boundingBoxes.toType(pointIdxMap.scalar_type())
-                    .data<int64_t>(),          // BxNx4 xmin ymin xmax ymax
-                projPoints.data<scalar_t>(),   // BxNx[2or3], xy1
-                pointColors.data<scalar_t>(),  // BxNx3
-                depthValues.data<scalar_t>(),  // BxNx1
-                rhoValues.data<scalar_t>(),    // BxNx1
-                dIdp.data<scalar_t>(),         // BxNx2 gradients for projX,Y
-                dIdz.data<scalar_t>(),         // BxNx1
-                debugTensor.data<scalar_t>()); // BxHxWx8
+                logIdx.data_ptr<int64_t>(),       // Bx1
+                colorGrads.data_ptr<scalar_t>(),  // BxHxWx3
+                pointIdxMap.data_ptr<int64_t>(),  // BxHxWxtopK
+                rhoMap.data_ptr<scalar_t>(),      // BxHxWxtopK
+                wsMap.data_ptr<scalar_t>(),       // BxHxWxtopKx3
+                depthMap.data_ptr<scalar_t>(),    // BxHxWxtopK
+                isBehind.data_ptr<bool>(),     // BxHxWxtopK
+                pixelValues.data_ptr<scalar_t>(), // BxHxWx3
+                boundingBoxes.data_ptr<int64_t>(),          // BxNx4 xmin ymin xmax ymax
+                projPoints.data_ptr<scalar_t>(),   // BxNx[2or3], xy1
+                pointColors.data_ptr<scalar_t>(),  // BxNx3
+                depthValues.data_ptr<scalar_t>(),  // BxNx1
+                rhoValues.data_ptr<scalar_t>(),    // BxNx1
+                dIdp.data_ptr<scalar_t>(),         // BxNx2 gradients for projX,Y
+                dIdz.data_ptr<scalar_t>(),         // BxNx1
+                debugTensor.data_ptr<scalar_t>()); // BxHxWx8
       }));
   output.push_back(dIdp);
   output.push_back(dIdz);
@@ -860,13 +861,12 @@ __global__ void visibility_reference_backward_kernel(
     const int projDim, const int WDim, const scalar_t focalL,
     const scalar_t mergeT, const scalar_t gamma,
     const bool considerZ,
-    const indice_t verboseLogIdx,
     const scalar_t *__restrict__ colorGrads,    // BxHxWx3 gradient from output
     const indice_t *__restrict__ pointIdxMap,   // BxHxWxtopK
     const scalar_t *__restrict__ rhoMap,        // BxHxWxtopK
     const scalar_t *__restrict__ wsMap,         // BxHxWxtopKx3
     const scalar_t *__restrict__ depthMap,      // BxHxWxtopK
-    const uint8_t *__restrict__ isBehind,       // BxHxWxtopK
+    const bool *__restrict__ isBehind,       // BxHxWxtopK
     const scalar_t *__restrict__ pixelValues,   // BxHxWx3
     const indice_t *__restrict__ boundingBoxes, // BxNx4 xmin ymin xmax ymax
     const scalar_t *__restrict__ projPoints,    // BxNx[2or3], xy1
@@ -875,9 +875,7 @@ __global__ void visibility_reference_backward_kernel(
     const scalar_t *__restrict__ rhoValues,     // BxNx1
     const scalar_t *__restrict__ Ms,            // BxNx2x2
     scalar_t *__restrict__ dIdp,                // BxNx2 gradients for screenX and screenY
-    scalar_t *__restrict__ dIdz,                // BxNx1 gradients for z
-    scalar_t *__restrict__ debugTensor          // BxHxWx8 log gradients for verboseLogIdx
-)
+    scalar_t *__restrict__ dIdz)                // BxNx1 gradients for z
 {
   // const scalar_t mergeT = scalar_t(mergeThres);
   // const scalar_t focalL = scalar_t(focalLength);
@@ -889,7 +887,6 @@ __global__ void visibility_reference_backward_kernel(
          p += blockDim.x * gridDim.y)
     {
       const indice_t curPointIdx = b * PN + p;
-      const bool logPoint = (curPointIdx == verboseLogIdx);
       // skip point (gradient=0) if mask == 1 (i.e. point is good)
       // scalar_t xmin = scalar_t(boundingBoxes[curPointIdx * 4]);
       // scalar_t ymin = scalar_t(boundingBoxes[curPointIdx * 4 + 1]);
@@ -925,7 +922,7 @@ __global__ void visibility_reference_backward_kernel(
           const scalar_t *curPixelValues = pixelValues + curPixelIdx * WDim;
           const scalar_t *curDepthList = depthMap + curPixelIdx * topK;
           // const scalar_t curClosestDepth = depthMap[curPixelIdx * topK];
-          const uint8_t *curIsBehind = isBehind + curPixelIdx * topK;
+          const bool *curIsBehind = isBehind + curPixelIdx * topK;
           const scalar_t curPointDepth = depthValues[curPointIdx];
           // is this pixel inside the splat?
           int curK;
@@ -971,12 +968,6 @@ __global__ void visibility_reference_backward_kernel(
                 scalar_t dz = newDepth - curPointDepth;
                 didzv = dz / gamma * exp(-dz * dz / gamma);
               }
-              if (logPoint)
-              {
-                debugTensor[curPixelIdx * 8] = didxv_tmp;
-                debugTensor[curPixelIdx * 8 + 1] = didyv_tmp;
-                debugTensor[curPixelIdx * 8 + 2] = didzv_tmp;
-              }
               didxv = didxv_tmp * dL;
               didyv = didyv_tmp * dL;
               didzv = didzv_tmp * dL;
@@ -986,7 +977,7 @@ __global__ void visibility_reference_backward_kernel(
           else
           {
             // is the current point shown?
-            if (curIsBehind[curK] < 1)
+            if (!curIsBehind[curK])
             {
               // dIdx dIdy and dIdz-
               after_removal(WDim, topK, curK, mergeT, curDepthList, curIdxList,
@@ -1008,12 +999,6 @@ __global__ void visibility_reference_backward_kernel(
               scalar_t didxv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m11 * dx + m12 * dy);
               scalar_t didyv_tmp = 2 / rhov * exp(-(m11 * dx * dx + (m12 + m21) * dx * dy + m22 * dy * dy)) * (m21 * dx + m22 * dy);
               scalar_t didzv_tmp = 0;
-              if (logPoint)
-              {
-                debugTensor[curPixelIdx * 8] = didxv_tmp;
-                debugTensor[curPixelIdx * 8 + 1] = didyv_tmp;
-                debugTensor[curPixelIdx * 8 + 2] = didzv_tmp;
-              }
               if (dldI < 0)
               {
                 didxv = didxv_tmp * dL;
@@ -1045,12 +1030,6 @@ __global__ void visibility_reference_backward_kernel(
                 didzv = 2 * dz / gamma * exp(-dz * dz / gamma);
                 // }
               }
-              if (logPoint)
-              {
-                debugTensor[curPixelIdx * 8] = didxv;
-                debugTensor[curPixelIdx * 8 + 1] = didyv;
-                debugTensor[curPixelIdx * 8 + 2] = didzv;
-              }
               didxv = didxv * dL;
               didyv = didyv * dL;
               didzv = didzv * dL;
@@ -1060,18 +1039,6 @@ __global__ void visibility_reference_backward_kernel(
           (*curdIdz) += didzv;
           (*dIdx) += didxv;
           (*dIdy) += didyv;
-          if (logPoint)
-          {
-            // debugTensor[curPixelIdx * 8] = didxv;
-            // debugTensor[curPixelIdx * 8 + 1] = didyv;
-            // debugTensor[curPixelIdx * 8 + 2] = didzv;
-            debugTensor[curPixelIdx * 8 + 3] = dldI;
-            for (size_t c = 0; c < WDim; c++)
-            {
-              debugTensor[curPixelIdx * 8 + 4 + c] = newColors[c];
-            }
-            debugTensor[curPixelIdx * 8 + 7] = newDepth;
-          }
         } // imWidth
       }   // imHeight
     }     // point
@@ -1082,7 +1049,7 @@ std::vector<at::Tensor>
 visibility_reference_backward_cuda(const double focalLength, const double mergeThres,
                                    const double gamma,
                                    const bool considerZ, const int localHeight,
-                                   const int localWidth, const int logIdx,
+                                   const int localWidth,
                                    const at::Tensor &colorGrads,    // BxHxWxWDim
                                    const at::Tensor &pointIdxMap,   // BxHxWxtopK
                                    const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -1113,8 +1080,8 @@ visibility_reference_backward_cuda(const double focalLength, const double mergeT
   std::vector<at::Tensor> outputs;
   unsigned int n_threads, n_blocks;
   n_threads = opt_n_threads(PN);
-  n_blocks = min(32, (PN * batchSize + n_threads - 1) / n_threads);
-  const int64_t verboseLogIdx = int64_t(logIdx);
+  n_blocks = min(32u, (PN * batchSize + n_threads - 1) / n_threads);
+
   // initialize with zeros
   dIdp.zero_();
   dIdz.zero_();
@@ -1125,9 +1092,6 @@ visibility_reference_backward_cuda(const double focalLength, const double mergeT
   // dldI = outputs[:, :, :, 3]
   // newColor = outputs[:, :, :, 4:7]
   // newDepth = outputs[:, :, :, 7]
-  at::Tensor debugTensor =
-      at::zeros({batchSize, imgHeight, imgWidth, 8}, colorGrads.options());
-  std::vector<at::Tensor> output;
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       colorGrads.scalar_type(), "visibility_reference_backward_kernel", ([&] {
@@ -1137,28 +1101,25 @@ visibility_reference_backward_cuda(const double focalLength, const double mergeT
                 PN, projDim, WDim,
                 scalar_t(focalLength), scalar_t(mergeThres), scalar_t(gamma),
                 considerZ,
-                verboseLogIdx,
-                colorGrads.data<scalar_t>(),  // BxHxWx3
-                pointIdxMap.data<int64_t>(),  // BxHxWxtopK
-                rhoMap.data<scalar_t>(),      // BxHxWxtopK
-                wsMap.data<scalar_t>(),       // BxHxWxtopKx3
-                depthMap.data<scalar_t>(),    // BxHxWxtopK
-                isBehind.data<uint8_t>(),     // BxHxWxtopK
-                pixelValues.data<scalar_t>(), // BxHxWx3
-                boundingBoxes.toType(pointIdxMap.scalar_type())
-                    .data<int64_t>(),          // BxNx4 xmin ymin xmax ymax
-                projPoints.data<scalar_t>(),   // BxNx[2or3], xy1
-                pointColors.data<scalar_t>(),  // BxNx3
-                depthValues.data<scalar_t>(),  // BxNx1
-                rhoValues.data<scalar_t>(),    // BxNx1
-                Ms.data<scalar_t>(),           // BxNx2x2
-                dIdp.data<scalar_t>(),         // BxNx2 gradients for projX,Y
-                dIdz.data<scalar_t>(),         // BxNx1
-                debugTensor.data<scalar_t>()); // BxHxWx8
+                colorGrads.data_ptr<scalar_t>(),  // BxHxWx3
+                pointIdxMap.data_ptr<int64_t>(),  // BxHxWxtopK
+                rhoMap.data_ptr<scalar_t>(),      // BxHxWxtopK
+                wsMap.data_ptr<scalar_t>(),       // BxHxWxtopKx3
+                depthMap.data_ptr<scalar_t>(),    // BxHxWxtopK
+                isBehind.data_ptr<bool>(),     // BxHxWxtopK
+                pixelValues.data_ptr<scalar_t>(), // BxHxWx3
+                boundingBoxes.data_ptr<int64_t>(),          // BxNx4 xmin ymin xmax ymax
+                projPoints.data_ptr<scalar_t>(),   // BxNx[2or3], xy1
+                pointColors.data_ptr<scalar_t>(),  // BxNx3
+                depthValues.data_ptr<scalar_t>(),  // BxNx1
+                rhoValues.data_ptr<scalar_t>(),    // BxNx1
+                Ms.data_ptr<scalar_t>(),           // BxNx2x2
+                dIdp.data_ptr<scalar_t>(),         // BxNx2 gradients for projX,Y
+                dIdz.data_ptr<scalar_t>()         // BxNx1
+                );
       }));
-  output.push_back(dIdp);
-  output.push_back(dIdz);
-  output.push_back(debugTensor);
+  outputs.push_back(dIdp);
+  outputs.push_back(dIdz);
 
   cudaError_t err = cudaDeviceSynchronize();
   if (err != cudaSuccess)
@@ -1167,5 +1128,5 @@ visibility_reference_backward_cuda(const double focalLength, const double mergeT
            cudaGetErrorString(err));
     exit(-1);
   }
-  return output;
+  return outputs;
 }

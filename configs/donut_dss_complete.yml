@@ -1,0 +1,333 @@
+!!python/object/new:easydict.EasyDict
+dictitems:
+  data: &id017 !!python/object/new:easydict.EasyDict
+    dictitems:
+      data_dict: data_dict.npz
+      data_dir: data/synthetic/Torus
+      depth_extension: exr
+      depth_folder: depth
+      depth_from_visual_hull: false
+      depth_range: &id001
+      - 1
+      - 25
+      img_extension: png
+      img_extension_input: jpg
+      img_folder: image
+      img_with_camera: true
+      img_with_mask: true
+      mask_extension: png
+      mask_folder: mask
+      type: MVR
+    state:
+      data_dict: data_dict.npz
+      data_dir: data/synthetic/Torus
+      depth_extension: exr
+      depth_folder: depth
+      depth_from_visual_hull: false
+      depth_range: *id001
+      img_extension: png
+      img_extension_input: jpg
+      img_folder: image
+      img_with_camera: true
+      img_with_mask: true
+      mask_extension: png
+      mask_folder: mask
+      type: MVR
+  generation: &id018 !!python/object/new:easydict.EasyDict
+    dictitems:
+      batch_size: 1
+      generation_dir: generation
+      mesh_extension: ply
+      padding: 0.0
+      points_batch_size: 100000
+      refine_max_faces: 10000
+      refinement_step: 2
+      resolution0: 16
+      simplify_nfaces: null
+      upsampling_steps: 3
+      vis_n_outputs: 30
+      with_color: true
+      with_colors: true
+    state:
+      batch_size: 1
+      generation_dir: generation
+      mesh_extension: ply
+      padding: 0.0
+      points_batch_size: 100000
+      refine_max_faces: 10000
+      refinement_step: 2
+      resolution0: 16
+      simplify_nfaces: null
+      upsampling_steps: 3
+      vis_n_outputs: 30
+      with_color: true
+      with_colors: true
+  model: &id019 !!python/object/new:easydict.EasyDict
+    dictitems:
+      c_dim: 256
+      decoder: null
+      decoder_kwargs: &id006 !!python/object/new:easydict.EasyDict
+        dictitems:
+          activation: null
+          dropout: &id002 []
+          dropout_prob: 0.2
+          hidden_size: 512
+          latent_dropout: false
+          latent_in: &id003 []
+          n_layers: 8
+          norm_layers: &id004
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          out_dim: 4
+          weight_norm: true
+          xyz_in_all: false
+        state:
+          activation: null
+          dropout: *id002
+          dropout_prob: 0.2
+          hidden_size: 512
+          latent_dropout: false
+          latent_in: *id003
+          n_layers: 8
+          norm_layers: *id004
+          out_dim: 4
+          weight_norm: true
+          xyz_in_all: false
+      depth_function_kwargs: &id007 !!python/object/new:easydict.EasyDict
+        dictitems:
+          is_occupancy: true
+        state:
+          is_occupancy: true
+      encoder: null
+      encoder_kwargs: &id008 !!python/object:easydict.EasyDict {}
+      model_kwargs: &id009 !!python/object/new:easydict.EasyDict
+        dictitems:
+          learn_colors: false
+          learn_normals: true
+          learn_points: true
+          learn_size: false
+          n_points_per_cloud: 8000
+          point_scale_range: &id005
+          - 0.3
+          - 1.5
+          uniform_projection: true
+        state:
+          learn_colors: false
+          learn_normals: true
+          learn_points: true
+          learn_size: false
+          n_points_per_cloud: 8000
+          point_scale_range: *id005
+          uniform_projection: true
+      texture: DSS.models.common.Texture
+      texture_kwargs: &id010 !!python/object/new:easydict.EasyDict
+        dictitems:
+          dim: 3
+          num_frequencies: 4
+          pos_encoding: true
+          use_normal: true
+        state:
+          dim: 3
+          num_frequencies: 4
+          pos_encoding: true
+          use_normal: true
+      type: point
+    state:
+      c_dim: 256
+      decoder: null
+      decoder_kwargs: *id006
+      depth_function_kwargs: *id007
+      encoder: null
+      encoder_kwargs: *id008
+      model_kwargs: *id009
+      texture: DSS.models.common.Texture
+      texture_kwargs: *id010
+      type: point
+  name: donut_dss_knn_0.1_0.1
+  renderer: &id020 !!python/object/new:easydict.EasyDict
+    dictitems:
+      composite_params: &id011 !!python/object:easydict.EasyDict {}
+      compositor_type: pytorch3d.renderer.NormWeightedCompositor
+      is_neural_texture: false
+      lighting: from_data
+      raster_params: &id012 !!python/object/new:easydict.EasyDict
+        dictitems:
+          Vrk_isotropic: true
+          backward_rbf: false
+          bin_size: null
+          clip_pts_grad: -1
+          cutoff_threshold: 0.5
+          depth_merging_threshold: 0.02
+          image_size: 512
+          max_points_per_bin: null
+          points_per_pixel: 5
+          radii_backward_scaler: 5
+        state:
+          Vrk_isotropic: true
+          backward_rbf: false
+          bin_size: null
+          clip_pts_grad: -1
+          cutoff_threshold: 0.5
+          depth_merging_threshold: 0.02
+          image_size: 512
+          max_points_per_bin: null
+          points_per_pixel: 5
+          radii_backward_scaler: 5
+      raster_type: DSS.core.rasterizer.SurfaceSplatting
+      renderer_params: &id013 !!python/object/new:easydict.EasyDict
+        dictitems:
+          backface_culling: true
+          frnn_radius: 0
+        state:
+          backface_culling: true
+          frnn_radius: 0
+      renderer_type: DSS.core.renderer.SurfaceSplattingRenderer
+    state:
+      composite_params: *id011
+      compositor_type: pytorch3d.renderer.NormWeightedCompositor
+      is_neural_texture: false
+      lighting: from_data
+      raster_params: *id012
+      raster_type: DSS.core.rasterizer.SurfaceSplatting
+      renderer_params: *id013
+      renderer_type: DSS.core.renderer.SurfaceSplattingRenderer
+  rendering: &id021 !!python/object/new:easydict.EasyDict
+    dictitems:
+      background: white
+      colors: rgb
+      extension: jpg
+      n_start_view: 0
+      n_views: 1
+      ray_sampling_accuracy: &id014
+      - 1024
+      - 1025
+      render_dir: rendering
+      resolution: &id015
+      - 256
+      - 256
+    state:
+      background: white
+      colors: rgb
+      extension: jpg
+      n_start_view: 0
+      n_views: 1
+      ray_sampling_accuracy: *id014
+      render_dir: rendering
+      resolution: *id015
+  test: &id022 !!python/object/new:easydict.EasyDict
+    dictitems:
+      eval_file_name: eval_meshes
+      model_file: model_best.pt
+      threshold: 0.5
+    state:
+      eval_file_name: eval_meshes
+      model_file: model_best.pt
+      threshold: 0.5
+  training: &id023 !!python/object/new:easydict.EasyDict
+    dictitems:
+      always_freespace: true
+      backup_every: 50000
+      batch_size: 8
+      batch_size_val: 1
+      checkpoint_every: 200
+      clip_grad: false
+      debug_every: 100
+      depth_loss_on_world_points: false
+      lambda_boundary: 0.0
+      lambda_depth: 0.0
+      lambda_dr_proj: 0.1
+      lambda_dr_repel: 0.1
+      lambda_dr_rgb: 1.0
+      lambda_dr_silhouette: 1.0
+      lambda_eikonal: 0.0
+      lambda_freespace: 0.0
+      lambda_image_gradients: 0.0
+      lambda_normal: 0.0
+      lambda_occupied: 0.0
+      lambda_rgb: 0.0
+      lambda_sparse_depth: 0.0
+      learning_rate: 0.1
+      logfile: train.log
+      model_selection_metric: loss
+      model_selection_mode: minimize
+      multi_gpu: false
+      n_debug_points: -1
+      n_eval_points: 1000
+      n_training_points: 4000
+      n_workers: 2
+      occupancy_random_normal: false
+      out_dir: exp
+      overwrite_visualization: false
+      patch_size: 1
+      print_every: 10
+      prune_every: 100
+      reduction_method: mean
+      saliency_sampling: true
+      sample_continuous: false
+      scheduler_gamma: 0.5
+      scheduler_milestones: &id016
+      - 2000
+      - 4000
+      use_cube_intersection: true
+      validate_every: -1
+      visualize_every: 100
+    state:
+      always_freespace: true
+      backup_every: 50000
+      batch_size: 8
+      batch_size_val: 1
+      checkpoint_every: 200
+      clip_grad: false
+      debug_every: 100
+      depth_loss_on_world_points: false
+      lambda_boundary: 0.0
+      lambda_depth: 0.0
+      lambda_dr_proj: 0.0
+      lambda_dr_repel: 0.0
+      lambda_dr_rgb: 1.0
+      lambda_dr_silhouette: 1.0
+      lambda_eikonal: 0.0
+      lambda_freespace: 0.0
+      lambda_image_gradients: 0.0
+      lambda_normal: 0.0
+      lambda_occupied: 0.0
+      lambda_rgb: 0.0
+      lambda_sparse_depth: 0.0
+      learning_rate: 0.1
+      logfile: train.log
+      model_selection_metric: loss
+      model_selection_mode: minimize
+      multi_gpu: false
+      n_debug_points: -1
+      n_eval_points: 1000
+      n_training_points: 4000
+      n_workers: 2
+      occupancy_random_normal: false
+      out_dir: exp
+      overwrite_visualization: false
+      patch_size: 1
+      print_every: 10
+      prune_every: 100
+      reduction_method: mean
+      saliency_sampling: true
+      sample_continuous: false
+      scheduler_gamma: 0.5
+      scheduler_milestones: *id016
+      use_cube_intersection: true
+      validate_every: 2000
+      visualize_every: 100
+state:
+  data: *id017
+  generation: *id018
+  model: *id019
+  name: donut_dss_knn_0.1_0.1
+  renderer: *id020
+  rendering: *id021
+  test: *id022
+  training: *id023

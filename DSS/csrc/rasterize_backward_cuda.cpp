@@ -23,7 +23,8 @@ visibility_backward_cuda(const double focalLength, const double mergeThres,
 std::vector<at::Tensor>
 visibility_debug_backward_cuda(const double focalLength, const double mergeThres,
                          const bool considerZ, const int localHeight,
-                         const int localWidth, const int logIdx,
+                         const int localWidth,
+                         const at::Tensor &logIdx,        // Bx1
                          const at::Tensor &colorGrads,    // BxHxWx3
                          const at::Tensor &pointIdxMap,   // BxHxWxtopK
                          const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -41,7 +42,8 @@ visibility_debug_backward_cuda(const double focalLength, const double mergeThres
 std::vector<at::Tensor>
 visibility_debug_backward(const double focalLength, const double mergeThres,
                     const bool considerZ, const int localHeight,
-                    const int localWidth, const int logIdx,
+                    const int localWidth,
+                    const at::Tensor &logIdx,        // Bx1
                     const at::Tensor &colorGrads,    // BxHxWx3
                     const at::Tensor &pointIdxMap,   // BxHxWxtopK
                     const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -56,6 +58,7 @@ visibility_debug_backward(const double focalLength, const double mergeThres,
                     const at::Tensor &rhoValues,     // BxNx1
                     at::Tensor &dIdp, at::Tensor &dIdz) {
 
+  CHECK_INPUT(logIdx);
   CHECK_INPUT(colorGrads);
   CHECK_INPUT(pointIdxMap);
   CHECK_INPUT(rhoMap);
@@ -151,7 +154,7 @@ std::vector<at::Tensor>
 visibility_reference_backward_cuda(const double focalLength, const double mergeThres,
                                    const double gamma,
                                    const bool considerZ, const int localHeight,
-                                   const int localWidth, const int logIdx,
+                                   const int localWidth,
                                    const at::Tensor &colorGrads,    // BxHxWxWDim
                                    const at::Tensor &pointIdxMap,   // BxHxWxtopK
                                    const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -171,7 +174,7 @@ std::vector<at::Tensor>
 visibility_reference_backward(const double focalLength, const double mergeThres,
                               const double gamma,
                               const bool considerZ, const int localHeight,
-                              const int localWidth, const int logIdx,
+                              const int localWidth,
                               const at::Tensor &colorGrads,    // BxHxWx3
                               const at::Tensor &pointIdxMap,   // BxHxWxtopK
                               const at::Tensor &rhoMap,        // BxHxWxtopK
@@ -220,7 +223,7 @@ visibility_reference_backward(const double focalLength, const double mergeThres,
     CHECK_CUDA(dIdz);
 
     return visibility_reference_backward_cuda(
-        focalLength, mergeThres, gamma, considerZ, localHeight, localWidth, logIdx, colorGrads,
+        focalLength, mergeThres, gamma, considerZ, localHeight, localWidth, colorGrads,
         pointIdxMap, rhoMap, wsMap, depthMap, isBehind, pixelValues,
         boundingBoxes, projPoints, pointColors, depthValues, rhoValues, Ms, dIdp,
         dIdz);
