@@ -25,29 +25,35 @@ code for paper Differentiable Surface Splatting for Point-based Geometry Process
 ## installation
 1. clone
 ````bash
-git clone --recursive https://gitlab.inf.ethz.ch/OU-SORKINE/dss.git
+git clone --recursive https://github.com/yifita/DSS.git
 cd dss
 ````
-2. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
+2. install prequisitories. Our code uses python3.8, the installation instruction requires the latest anaconda.
 ````bash
-# install cuda, cudnn, nccl from nvidia
-# we tested with cuda 10.1, cudnn 7.5, nccl 1.3.5
-# update conda
-conda update -n base -c defaults conda
-# install requirements
-conda config --add channels pytorch
-conda config --add channels conda-forge
-conda create --name DSS --file requirements.txt
+# install cuda, cudnn from nvidia
+# we tested with cuda 10.2, cudnn 8.0
+# install pytorch 1.6 
+conda create -n DSS python=3.8
 conda activate DSS
-# plyfile package is not on conda
-pip install plyfile
+conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
+# install pytorch3d
+conda install -c conda-forge -c fvcore fvcore
+conda install pytorch3d -c pytorch3d
+# install plotly
+conda install -c plotly plotly
+# install other packages
+conda install -c conda-forge --file requirements.txt
+
+
 ````
 3. compile cuda library
 ````bash
 cd pytorch_points
 python setup.py install
-cd ..
-python setup.py develop
+cd ../external/torch_sampling
+python setup.py install
+cd ../torch-batch-svd
+python setup.py install
 ````
 ## Demos
 
