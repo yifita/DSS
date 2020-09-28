@@ -10,7 +10,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import frnn
 from typing import Optional
+from collections import namedtuple
 from pytorch3d import ops
 from DSS.core.cloud import PointClouds3D
 from DSS.utils import CannyFilter
@@ -151,6 +153,292 @@ class ImageGradientLoss(BaseLoss):
         if mask is not None:
             gradient_loss = gradient_loss[mask]
         return gradient_loss
+
+_NN = namedtuple("NN", "dists idxs nn")
+
+class RegularizationLoss(BaseLoss):
+    def __init__(self, reduction='mean', nn_k: int=33, filter_scale: float =2.0, 
+                 sharpness_sigma: float = 0.75, frnn_radius: float=-1):
+        super().__init__(reduction=reduction, channel_dim=None)
+        self.nn_tree = None
+        self.nn_k = nn_k
+        self.nn_mask = None
+        self.filter_scale = filter_scale
+        self.sharpness_sigma = sharpness_sigma
+        self.frnn_radius = frnn_radius
+
+    def _build_nn(self, point_clouds, use_frnn=True):
+        with torch.autograd.enable_grad():
+            points_padded = point_clouds.points_padded()
+
+        lengths = point_clouds.num_points_per_cloud()
+        if self.frnn_radius > 0:
+            dists, idxs, nn, _ = frnn.frnn_grid_points(
+                points_padded, points_padded, lengths, lengths, K=self.nn_k, return_nn=True, radius=self.frnn_radius
+            )
+            self.nn_mask = (idxs != -1)
+            assert(torch.all(dists[~self.nn_mask] == -1))
+        else:
+            dists, idxs, nn = ops.knn_points(
+                points_padded, points_padded, lengths, lengths, K=self.nn_k, return_nn=True
+            )
+            self.nn_mask = torch.full(
+                idxs.shape, False, dtype=torch.bool, device=points_padded.device
+            )
+            for b in range(self.nn_mask.shape[0]):
+                self.nn_mask[b, :lengths[b], :min(self.nn_k, lengths[b].item())] = True
+            assert(torch.all(dists[~self.nn_mask] == 0))
+
+        #TODO(lixin): maybe we should save the query point itself here?
+        self.nn_tree = _NN(
+            dists=dists[:, :, 1:], idxs=idxs[:, :, 1:], nn=nn[:, :, 1:, :]
+        )
+        self.nn_mask = self.nn_mask[:, :, 1:]
+        return
+    
+    def _denoise_normals(self, point_clouds, weights, point_clouds_filter=None):
+        lengths = point_clouds.num_points_per_cloud()
+        P_total = lengths.sum().item()
+        normals = point_clouds.normals_padded()
+        batch_size, max_P, _ = normals.shape
+
+        if self.frnn_radius > 0:
+            nn_normals = frnn.frnn_gather(normals, self.nn_tree.idxs, lengths)
+        else:
+            nn_normals = ops.knn_gather(normals, self.nn_tree.idxs, lengths)
+        normals_denoised = torch.sum(nn_normals * weights[:, :, :, None], dim=-2) / \
+            eps_denom(torch.sum(weights, dim=-1, keepdim=True))
+
+        # get point visibility so that we update only the non-visible or out-of-mask normals
+        if point_clouds_filter is not None:
+            try:
+                reliable_normals_mask = point_clouds_filter.visibility & point_clouds_filter.inmask
+                if len(point_clouds) != reliable_normals_mask.shape[0]:
+                    if len(point_clouds) == 1 and reliable_normals_mask.shape[0] > 1:
+                        reliable_normals_mask = reliable_normals_mask.any(
+                            dim=0, keepdim=True)
+                    else:
+                        ValueError("Incompatible point clouds {} and mask {}".format(
+                            len(point_clouds), reliable_normals_mask.shape))
+
+                # found visibility 0/1 as the last dimension of the features
+                # reset visible points normals to its original ones
+                normals_denoised[pts_reliable_normals_mask ==
+                                 1] = normals[reliable_normals_mask == 1]
+            except KeyError as e:
+                pass
+
+        normals_packed = point_clouds.normals_packed()
+        normals_denoised_packed = ops.padded_to_packed(
+            normals_denoised, point_clouds.cloud_to_packed_first_idx(), P_total)
+        point_clouds.update_normals_(normals_denoised_packed)
+        return point_clouds
+
+
+    def get_phi(self, point_clouds, **kwargs):
+        """
+        (1 - \|x-xi\|^2/hi^2)^4
+        Return:
+            weight per point per neighbor (N, maxP, K) [1] Eq.(12)
+        """
+        self.nn_tree = kwargs.get('nn_tree', self.nn_tree)
+        self.filter_scale = kwargs.get('filter_scale', self.filter_scale)
+        point_spacing_sq = self.nn_tree.dists[:, :, :1] * 2
+        s = point_spacing_sq * self.filter_scale * self.filter_scale
+        w = 1 - self.nn_tree.dists / s
+        w[w < 0] = 0
+        w = w * w
+        w = w * w
+        return w
+
+
+    def get_normal_w(self, point_clouds: PointClouds3D, normals: Optional[torch.Tensor] = None, **kwargs):
+        """
+        Weights exp(-\|n-ni\|^2/sharpness_sigma^2), for i in a local neighborhood
+        Args:
+            point_clouds: whose normals will be used for ni
+            normals (tensor): (N, maxP, 3) padded normals as n, if not provided, use
+                the normals from point_clouds
+        Returns:
+            weight per point per neighbor (N,maxP,K)
+        """
+        self.sharpness_sigma = kwargs.get(
+            'sharpness_sigma', self.sharpness_sigma)
+        inv_sigma_normal = 1 / (self.sharpness_sigma * self.sharpness_sigma)
+        lengths = point_clouds.num_points_per_cloud()
+
+        if normals is None:
+            normals = point_clouds.normals_padded()
+        if self.frnn_radius > 0:
+            nn_normals = frnn.frnn_gather(normals, self.nn_tree.idxs, lengths)
+        else:
+            nn_normals = ops.knn_gather(normals, self.nn_tree.idxs, lengths)
+        normals = torch.nn.functional.normalize(normals, dim=-1)
+        nn_normals = torch.nn.functional.normalize(nn_normals, dim=-1)
+        w = nn_normals - normals[:, :, None, :]
+
+        w = torch.exp(-torch.sum(w * w, dim=-1) * inv_sigma_normal)
+        return w
+        
+
+    def get_spatial_w_repel(self, point_clouds: PointClouds3D, points: Optional[torch.Tensor] = None, ):
+        """
+        Weights exp(\|p-pi\|^2/(sigma*h)^2), h=0.5
+        """
+        point_spacing_sq = self.nn_tree.dists[:, :, :1] * 4.0
+        inv_sigma_spatial = 1.0 / (point_spacing_sq * 0.25)
+        if points is None:
+            points = point_clouds.points_padded()
+        deltap = self.nn_tree.nn - points[:, :, None, :]
+        w = torch.exp(-torch.sum(deltap * deltap, dim=-1) * inv_sigma_spatial)
+        return w
+
+
+    def get_spatial_w_proj(self, point_clouds, **kwargs):
+        """
+        meshlab implementation skip this step, we do so as well, especially
+        since we don't really know what is the SDF function from points
+        """
+        w = torch.ones_like(self.nn_tree.dists)
+        return w
+
+
+    def get_density_w(self, point_clouds: PointClouds3D, points: Optional[torch.Tensor], **kwargs):
+        """
+        1 + exp(-\|x-xi\|^2/(sigma*h)^2)
+        """
+        point_spacing_sq = self.nn_tree.dists[:, :, :1] * 4.0
+        inv_sigma_spatial = 1.0 / (point_spacing_sq * 0.25)
+        if points is None:
+            with torch.autograd.enable_grad():
+                points = point_clouds.points_padded()
+        deltap = self.nn_tree.nn - points[:, :, None, :]
+        w = 1 + torch.exp(-torch.sum(deltap * deltap, dim=-1)
+                          * inv_sigma_spatial)
+        return w
+
+
+    def compute(self, point_clouds: PointClouds3D, points_filters=None, rebuild_nn=False, **kwargs):
+        """
+        Compute projection and repulsion losses in one pass
+        Args:
+            point_clouds
+            (optional) nn_tree: nn_points excluding the query point itself
+            (optional) nn_mask: mask valid nn results
+        Returns:
+            (P, N)
+        """
+        self.sharpness_sigma = kwargs.get(
+            'sharpness_sigma', self.sharpness_sigma)
+        self.filter_scale = kwargs.get('filter_scale', self.filter_scale)
+        self.nn_tree = kwargs.get('nn_tree', self.nn_tree)
+        self.nn_mask = kwargs.get('nn_mask', self.nn_mask)
+
+        lengths = point_clouds.num_points_per_cloud()
+        P_total = lengths.sum().item()
+        points_padded = point_clouds.points_padded()
+        # projection loss
+        # - determine phi spatial using local point spacing (i.e. 2*dist_to_nn)
+        # - denoise normals
+        # - determine w_normal
+        # - mask out values outside ballneighbor i.e. d > filterSpatialScale * localPointSpacing
+        # - projected distance dot(ni, x-xi)
+        # - multiply and normalize the weights
+        with torch.autograd.no_grad():
+            if rebuild_nn or self.nn_tree is None or self.nn_tree.idxs.shape[:2] != points_padded.shape[:2]:
+                self._build_nn(point_clouds)
+
+            phi = self.get_phi(point_clouds, **kwargs)
+
+            # robust normal mollification (Sec 4.4), i.e. replace normals with a weighted average
+            # from neighboring normals Eq.(11)
+            self._denoise_normals(point_clouds, phi, points_filters)
+
+
+            # compute wn and wr
+            # TODO(yifan): visibility weight?
+            normal_w = self.get_normal_w(point_clouds, **kwargs)
+            spatial_w_proj = self.get_spatial_w_proj(point_clouds, **kwargs)
+
+            # update normals for a second iteration (?) Eq.(10)
+            point_clouds = self._denoise_normals(
+                point_clouds, phi * normal_w, points_filters)
+
+            # compose weights
+            # weights smae here actually cause spatial_w_proj is just 1
+            weights_proj = phi * spatial_w_proj * normal_w
+            weights_proj[~self.nn_mask] = 0.0
+            # weights_repel = phi * normal_w
+            # weights_repel[~self.nn_mask] = 0.0
+
+            if self.frnn_radius <= 0:
+                # we are using knn
+                # outside filter_scale*local_point_spacing weights
+                mask_ball_query = self.nn_tree.dists > (self.filter_scale *
+                                                        self.nn_tree.dists[:, :, :1] * 2.0)
+                weights_proj[mask_ball_query] = 0.0
+                # weights_repel[mask_ball_query] = 0.0
+
+            # (B, P, k), dot product distance to surface
+            # (we need to gather again because the normals have been changed in the denoising step)
+            if self.frnn_radius > 0:
+                nn_normals = frnn.frnn_gather(
+                    point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
+
+            else:
+                nn_normals = ops.knn_gather(
+                    point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
+
+        dist_to_surface = torch.sum(
+            (self.nn_tree.nn.detach() - points_padded.unsqueeze(-2)) * nn_normals, dim=-1)
+
+        deltap = torch.sum(dist_to_surface[..., None] * weights_proj[..., None] * nn_normals, dim=-2) / \
+            eps_denom(torch.sum(weights_proj, dim=-1, keepdim=True))
+        
+        points_projected = points_padded + deltap
+
+        with torch.autograd.no_grad():
+            spatial_w_repel = self.get_spatial_w_repel(point_clouds, points_projected)
+            density_w_repel = spatial_w_repel + 1.0
+            weights_repel = normal_w * spatial_w_repel * density_w_repel
+            weights_repel[~self.nn_mask] = 0
+            if self.frnn_radius <= 0:
+                weights_repel[mask_ball_query] = 0
+        
+        deltap = points_projected[:, :, None, :] - self.nn_tree.nn.detach()
+        if self.frnn_radius > 0:
+            point_to_point_dist = torch.sum(deltap * deltap * self.nn_mask, dim=-1)
+        else:
+            point_to_point_dist = torch.sum(deltap * deltap, dim=-1)
+        
+
+        
+        # convert everything to packed
+        weights_proj = ops.padded_to_packed(
+            weights_proj, point_clouds.cloud_to_packed_first_idx(), P_total)
+        dist_to_surface = ops.padded_to_packed(
+            dist_to_surface, point_clouds.cloud_to_packed_first_idx(), P_total)
+        weights_repel = ops.padded_to_packed(
+            weights_repel, point_clouds.cloud_to_packed_first_idx(), P_total)
+        point_to_point_dist = ops.padded_to_packed(
+            point_to_point_dist, point_clouds.cloud_to_packed_first_idx(), P_total)
+
+        # compute weighted signed distance to surface
+        dist_to_surface = torch.sum(
+            weights_proj * dist_to_surface, dim=-1) / eps_denom(torch.sum(weights_proj, dim=-1))
+        projection_loss = dist_to_surface * dist_to_surface
+        repulsion_loss = -torch.sum(point_to_point_dist * weights_repel, dim=1) \
+            / eps_denom(torch.sum(weights_repel, dim=1))
+        return projection_loss, repulsion_loss
+    
+    def forward(self, *args, **kwargs):
+        # reduction = 'mean', channel_dim=None
+        projection_loss, repulsion_loss = self.compute(*args)
+        projection_loss = torch.mean(projection_loss)
+        repulsion_loss = torch.mean(repulsion_loss)
+
+        return projection_loss, repulsion_loss
+
 
 
 class SurfaceLoss(BaseLoss):

@@ -28,7 +28,7 @@ from ..core.cloud import PointClouds3D, PointCloudsFilters
 from ..utils.mathHelper import decompose_to_R_and_t, eps_sqrt
 from ..training.losses import (
     IouLoss, ProjectionLoss, RepulsionLoss, NormalLengthLoss,
-    L1Loss, SmapeLoss, ImageGradientLoss, NormalLoss)
+    L1Loss, SmapeLoss, ImageGradientLoss, NormalLoss, RegularizationLoss)
 from .scheduler import TrainerScheduler
 from ..models import PointModel
 from .. import get_debugging_mode, set_debugging_mode_, get_debugging_tensor, logger_py
@@ -174,6 +174,7 @@ class Trainer(BaseTrainer):
             reduction=self.reduction_method, filter_scale=2.0)
         self.repulsion_loss = RepulsionLoss(
             reduction=self.reduction_method, filter_scale=2.0)
+        self.regularization_loss = RegularizationLoss(reduction=self.reduction_method, filter_scale=2.0) 
         self.iou_loss = IouLoss(
             reduction=self.reduction_method, channel_dim=None)
         self.eikonal_loss = NormalLengthLoss(
@@ -387,22 +388,22 @@ class Trainer(BaseTrainer):
             point_clouds, img_pred, mask_img_pred = self.model(
                 mask_img, cameras=cameras)
 
-        else:
-            # 1.) Sample points on image plane ("pixels")
-            p = self.sample_pixels(n_points, img, it=it)
+        # else:
+        #     # 1.) Sample points on image plane ("pixels")
+        #     p = self.sample_pixels(n_points, img, it=it)
 
-            # 2.) Get Object Mask values and define masks for losses
-            mask_gt = get_tensor_values(
-                mask_img.float(), p, squeeze_channel_dim=True).bool()
+        #     # 2.) Get Object Mask values and define masks for losses
+        #     mask_gt = get_tensor_values(
+        #         mask_img.float(), p, squeeze_channel_dim=True).bool()
 
-            point_clouds, mask_pred, \
-                p_freespace, p_occupancy, \
-                sdf_freespace, sdf_occupancy = self.model(
-                    p, mask_gt=mask_gt, inputs=inputs, cameras=cameras, it=it)
-            rgb_pred = point_clouds.features_packed()
-            # rgb groundtruth
-            mask_rgb = mask_pred & mask_gt
-            rgb_gt = get_tensor_values(img, p)[mask_rgb]
+        #     point_clouds, mask_pred, \
+        #         p_freespace, p_occupancy, \
+        #         sdf_freespace, sdf_occupancy = self.model(
+        #             p, mask_gt=mask_gt, inputs=inputs, cameras=cameras, it=it)
+        #     rgb_pred = point_clouds.features_packed()
+        #     # rgb groundtruth
+        #     mask_rgb = mask_pred & mask_gt
+        #     rgb_gt = get_tensor_values(img, p)[mask_rgb]
 
         # 4.) Calculate Loss
         if isinstance(self.model, PointModel):
@@ -414,6 +415,11 @@ class Trainer(BaseTrainer):
                                   mask_img.squeeze(1),
                                   mask_img_pred.squeeze(-1),
                                   'mean', loss=loss)
+            # Projection and Repulsion loss
+            self.calc_pcl_reg_loss(
+                point_clouds, reduction_method, loss, it=it
+            )
+
 
         for k, v in loss.items():
             mode = 'val' if eval_mode else 'train'
@@ -494,6 +500,14 @@ class Trainer(BaseTrainer):
         if self.lambda_dr_repel > 0:
             loss_dr_repel = self.repulsion_loss(
                 point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_repel
+
+        with torch.no_grad():
+            proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter, frnn_radius=0)
+            proj_loss *= self.lambda_dr_proj
+            repel_loss *= self.lambda_dr_repel
+            logger_py.info("original proj loss: {:.6f}; repel loss: {:.6f}; new proj loss: {:.6f}; repel loss: {:.6f};".format(
+                loss_dr_proj, loss_dr_repel, proj_loss, repel_loss
+            ))
 
         loss['loss'] = loss_dr_proj + loss_dr_repel + loss['loss']
         loss['loss_dr_proj'] = loss_dr_proj

@@ -288,8 +288,8 @@ dictitems:
       depth_loss_on_world_points: false
       lambda_boundary: 0.0
       lambda_depth: 0.0
-      lambda_dr_proj: 0.0
-      lambda_dr_repel: 0.0
+      lambda_dr_proj: 0.1
+      lambda_dr_repel: 0.1
       lambda_dr_rgb: 1.0
       lambda_dr_silhouette: 1.0
       lambda_eikonal: 0.0
