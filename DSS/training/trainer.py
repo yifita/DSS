@@ -174,7 +174,7 @@ class Trainer(BaseTrainer):
             reduction=self.reduction_method, filter_scale=2.0)
         self.repulsion_loss = RepulsionLoss(
             reduction=self.reduction_method, filter_scale=2.0)
-        self.regularization_loss = RegularizationLoss(reduction=self.reduction_method, filter_scale=2.0) 
+        self.regularization_loss = RegularizationLoss(reduction=self.reduction_method, filter_scale=2.0, frnn_radius=0) 
         self.iou_loss = IouLoss(
             reduction=self.reduction_method, channel_dim=None)
         self.eikonal_loss = NormalLengthLoss(
@@ -502,7 +502,7 @@ class Trainer(BaseTrainer):
                 point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_repel
 
         with torch.no_grad():
-            proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter, frnn_radius=0)
+            proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter)
             proj_loss *= self.lambda_dr_proj
             repel_loss *= self.lambda_dr_repel
             logger_py.info("original proj loss: {:.6f}; repel loss: {:.6f}; new proj loss: {:.6f}; repel loss: {:.6f};".format(
@@ -510,8 +510,10 @@ class Trainer(BaseTrainer):
             ))
 
         loss['loss'] = loss_dr_proj + loss_dr_repel + loss['loss']
-        loss['loss_dr_proj'] = loss_dr_proj
-        loss['loss_dr_repel'] = loss_dr_repel
+        # loss['loss_dr_proj'] = loss_dr_proj
+        # loss['loss_dr_repel'] = loss_dr_repel
+        loss['loss_dr_proj'] = proj_loss
+        loss['loss_dr_repel'] = repel_loss
 
     def calc_dr_loss(self, img, img_pred, mask_img, mask_img_pred,
                      reduction_method, loss={}, **kwargs):
