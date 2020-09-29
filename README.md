@@ -25,7 +25,7 @@ code for paper Differentiable Surface Splatting for Point-based Geometry Process
 ## installation
 1. clone
 ````bash
-git clone --recursive https://gitlab.inf.ethz.ch/OU-SORKINE/dss.git
+git clone --recursive https://github.com/yifita/DSS.git
 cd dss
 ````
 2. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
