@@ -45,7 +45,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 self.compositor.__class__.__name__))
 
         self.frnn_radius = frnn_radius
-        logger_py.info("frnn_radius: {}".format(frnn_radius))
+        logger_py.error("frnn_radius: {}".format(frnn_radius))
 
     def to(self, device):
         super().to(device)
@@ -108,6 +108,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
             num_points_per_cloud = pointclouds.num_points_per_cloud()
             if self.frnn_radius <= 0:
                 # use knn here
+                logger_py.info("vrk knn points")
                 sq_dist, _, _ = ops3d.knn_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7)
@@ -166,6 +167,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
 
             num_points_per_cloud = pointclouds.num_points_per_cloud()
             if self.frnn_radius <= 0:
+                # logger_py.info("vrk knn points")
                 sq_dist, _, _ = ops3d.knn_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=3)

@@ -158,14 +158,15 @@ _NN = namedtuple("NN", "dists idxs nn")
 
 class RegularizationLoss(BaseLoss):
     def __init__(self, reduction='mean', nn_k: int=5, filter_scale: float =2.0, 
-                 sharpness_sigma: float = 0.75, frnn_radius: float=-1):
+                 sharpness_sigma: float = 0.75, loss_frnn_radius: float=-1):
         super().__init__(reduction=reduction, channel_dim=None)
         self.nn_tree = None
         self.nn_k = nn_k
         self.nn_mask = None
         self.filter_scale = filter_scale
         self.sharpness_sigma = sharpness_sigma
-        self.frnn_radius = frnn_radius
+        self.frnn_radius = loss_frnn_radius
+        logger_py.error("loss_frnn_radius: {}".format(loss_frnn_radius))
 
     def _build_nn(self, point_clouds, use_frnn=True):
         with torch.autograd.enable_grad():
@@ -180,6 +181,7 @@ class RegularizationLoss(BaseLoss):
             assert(torch.all(dists[~self.nn_mask] == -1))
         else:
             # logger_py.warning("KNN")
+            logger_py.info("loss knn points")
             dists, idxs, nn = ops.knn_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, return_nn=True
             )
@@ -385,14 +387,14 @@ class RegularizationLoss(BaseLoss):
 
             # (B, P, k), dot product distance to surface
             # (we need to gather again because the normals have been changed in the denoising step)
-            if self.frnn_radius > 0:
-                nn_normals = frnn.frnn_gather(
-                    point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
+        if self.frnn_radius > 0:
+            nn_normals = frnn.frnn_gather(
+                point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
 
-            else:
-                # logger_py.warning("KNN")
-                nn_normals = ops.knn_gather(
-                    point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
+        else:
+            # logger_py.warning("KNN")
+            nn_normals = ops.knn_gather(
+                point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
 
         dist_to_surface = torch.sum(
             (self.nn_tree.nn.detach() - points_padded.unsqueeze(-2)) * nn_normals, dim=-1)

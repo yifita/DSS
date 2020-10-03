@@ -96,6 +96,7 @@ class Trainer(BaseTrainer):
                  combined_after=-1, clip_grad=True, resample_every=-1, resample_threshold=0.9,
                  gamma_n_points_dss=2.0, gamma_n_rays=0.6, gamma_dss_backward_radii=0.99,
                  steps_n_points_dss=500, steps_n_rays=500, steps_dss_backward_radii=100,
+                 loss_frnn_radius=-1,
                  **kwargs):
         """Initialize the BaseModel class.
         Args:
@@ -174,7 +175,7 @@ class Trainer(BaseTrainer):
             reduction=self.reduction_method, filter_scale=2.0)
         self.repulsion_loss = RepulsionLoss(
             reduction=self.reduction_method, filter_scale=2.0)
-        self.regularization_loss = RegularizationLoss(reduction=self.reduction_method, filter_scale=2.0, frnn_radius=0) 
+        self.regularization_loss = RegularizationLoss(reduction=self.reduction_method, filter_scale=2.0, loss_frnn_radius=loss_frnn_radius) 
         self.iou_loss = IouLoss(
             reduction=self.reduction_method, channel_dim=None)
         self.eikonal_loss = NormalLengthLoss(
@@ -494,26 +495,35 @@ class Trainer(BaseTrainer):
 
         loss_dr_repel = 0
         loss_dr_proj = 0
-        if self.lambda_dr_proj > 0:
-            loss_dr_proj = self.projection_loss(
-                point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_proj
-        if self.lambda_dr_repel > 0:
-            loss_dr_repel = self.repulsion_loss(
-                point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_repel
-
-        with torch.no_grad():
+        # if self.lambda_dr_proj > 0:
+        #     loss_dr_proj = self.projection_loss(
+        #         # point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_proj
+        #         point_clouds, rebuild_knn=True, points_filter=self.model.points_filter) * self.lambda_dr_proj
+        # if self.lambda_dr_repel > 0:
+        #     loss_dr_repel = self.repulsion_loss(
+        #         # point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_repel
+        #         point_clouds, rebuild_knn=True, points_filter=self.model.points_filter) * self.lambda_dr_repel
+        if self.lambda_dr_proj > 0 or self.lambda_dr_repel > 0:
             proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter)
             proj_loss *= self.lambda_dr_proj
             repel_loss *= self.lambda_dr_repel
-            logger_py.info("original proj loss: {:.6f}; repel loss: {:.6f}; new proj loss: {:.6f}; repel loss: {:.6f};".format(
-                loss_dr_proj, loss_dr_repel, proj_loss, repel_loss
-            ))
 
-        loss['loss'] = loss_dr_proj + loss_dr_repel + loss['loss']
+        # with torch.no_grad():
+        #     proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter)
+        #     proj_loss *= self.lambda_dr_proj
+        #     repel_loss *= self.lambda_dr_repel
+        #     logger_py.info("original proj loss: {:.6f}; repel loss: {:.6f}; new proj loss: {:.6f}; repel loss: {:.6f};".format(
+        #         loss_dr_proj, loss_dr_repel, proj_loss, repel_loss
+        #     ))
+
+
+
+        # loss['loss'] = loss_dr_proj + loss_dr_repel + loss['loss']
+        loss['loss'] = proj_loss + repel_loss + loss['loss']
         # loss['loss_dr_proj'] = loss_dr_proj
         # loss['loss_dr_repel'] = loss_dr_repel
-        loss['loss_dr_proj'] = proj_loss
-        loss['loss_dr_repel'] = repel_loss
+        # loss['loss_dr_proj'] = proj_loss
+        # loss['loss_dr_repel'] = repel_loss
 
     def calc_dr_loss(self, img, img_pred, mask_img, mask_img_pred,
                      reduction_method, loss={}, **kwargs):
