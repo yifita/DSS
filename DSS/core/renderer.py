@@ -16,6 +16,8 @@ from .. import logger_py
 from .. import get_debugging_mode, get_debugging_tensor
 import frnn
 
+import time
+
 
 __all__ = ['SurfaceSplattingRenderer']
 
@@ -551,6 +553,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
         cutoff_threshold
         """
 
+        t1 = time.time()
         if point_clouds.isempty():
             return None
 
@@ -570,6 +573,8 @@ class SurfaceSplattingRenderer(PointsRenderer):
 
         if point_clouds.isempty():
             return None
+        torch.cuda.synchronize()
+        t2 = time.time()
 
         # compute per-point features for elliptical gaussian weights
         with torch.autograd.no_grad():
@@ -578,10 +583,14 @@ class SurfaceSplattingRenderer(PointsRenderer):
 
         per_point_info['cutoff_threshold'] = cutoff_thres_alpha * \
             per_point_info['cutoff_threshold']
+        torch.cuda.synchronize()
+        t3 = time.time()
 
         # rasterize
         fragments = self.rasterizer(
             point_clouds, per_point_info, **kwargs)
+        torch.cuda.synchronize()
+        t4 = time.time()
 
         # compute weight: scalar*exp(-0.5Q)
         frag_scaler = gather_with_neg_idx(
@@ -608,6 +617,8 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 **kwargs
             )
         images = images.clamp(0, 1)
+        torch.cuda.synchronize()
+        t5 = time.time()
 
         # permute so image comes at the end
         images = images.permute(0, 2, 3, 1)
@@ -631,6 +642,8 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 valid_depth_mask.float(), first_idx, max_P).bool()
             point_clouds_filter.set_filter(
                 visibility=original_visibility_mask)
+        torch.cuda.synchronize()
+        t6 = time.time()
 
 
         if verbose:
@@ -642,6 +655,15 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 original_per_point_info[k][valid_depth_mask] = per_point_info[k]
 
             return images, original_per_point_info, fragments
+        t1 *= 1000
+        t2 *= 1000
+        t3 *= 1000
+        t4 *= 1000
+        t5 *= 1000
+        t6 *= 1000
+        logger_py.info("pre: {:.2f}; per-point: {:.2f}; rasterize: {:.2f}; compositor: {:.2f}; post {:.2f}".format(
+            t2-t1, t3-t2, t4-t3, t5-t4, t6-t5
+        ))
         return images
 
 

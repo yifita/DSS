@@ -169,6 +169,7 @@ class RegularizationLoss(BaseLoss):
         logger_py.error("loss_frnn_radius: {}".format(loss_frnn_radius))
 
     def _build_nn(self, point_clouds, use_frnn=True):
+        logger_py.error("build nn")
         with torch.autograd.enable_grad():
             points_padded = point_clouds.points_padded()
 
@@ -350,6 +351,7 @@ class RegularizationLoss(BaseLoss):
         # - projected distance dot(ni, x-xi)
         # - multiply and normalize the weights
         with torch.autograd.no_grad():
+            logger_py.error("rebuild_nn: {}".format(rebuild_nn))
             if rebuild_nn or self.nn_tree is None or self.nn_tree.idxs.shape[:2] != points_padded.shape[:2]:
                 self._build_nn(point_clouds)
 
@@ -443,7 +445,7 @@ class RegularizationLoss(BaseLoss):
     
     def forward(self, *args, **kwargs):
         # reduction = 'mean', channel_dim=None
-        projection_loss, repulsion_loss = self.compute(*args)
+        projection_loss, repulsion_loss = self.compute(*args, **kwargs)
         projection_loss = torch.mean(projection_loss)
         repulsion_loss = torch.mean(repulsion_loss)
 

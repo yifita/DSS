@@ -15,6 +15,8 @@ from ..core.cloud import PointClouds3D, PointCloudsFilters
 from ..core.texture import LightingTexture
 from ..utils.mathHelper import vectors_to_angles
 
+import time
+
 
 class Model(nn.Module):
     def __init__(self, points, normals, colors, renderer, texture=None,
@@ -136,6 +138,7 @@ class Model(nn.Module):
             rgb (tensor): (N, H, W, 3)
             mask (tensor): (N, H, W, 1)
         """
+        t1 = time.time()
         self.cameras = kwargs.get('cameras', self.cameras)
         assert(self.cameras is not None), 'cameras wasn\'t set.'
         device = self.points.device
@@ -152,10 +155,14 @@ class Model(nn.Module):
 
         self.point_size_scaler.data = torch.clamp(
             self.point_size_scaler, min=self.point_scale_range[0], max=self.point_scale_range[1])
+        torch.cuda.synchronize()
+        t2 = time.time()
 
         rgba = self.renderer(
             colored_pointclouds, self.points_filter,
             cutoff_thres_alpha=self.point_size_scaler, cameras=self.cameras)
+        torch.cuda.synchronize()
+        t3 = time.time()
         self.points_filter.visibility = self.points_filter.visibility.any(dim=0, keepdim=True)
         # the activation is expanded when creating visibility filter
         self.points_filter.activation = self.points_filter.activation[:1]
@@ -192,6 +199,8 @@ class Model(nn.Module):
                 mask_pred = mask_pred & self.points_filter.visibility
                 # will be used for projection and repulsion loss
                 self.points_filter.set_filter(inmask=mask_pred)
+        torch.cuda.synchronize()
+        t4 = time.time()
 
         if get_debugging_mode():
             dbg_tensor = get_debugging_tensor()
@@ -218,6 +227,12 @@ class Model(nn.Module):
             self.hooks.append(handle)
             handle = points.register_hook(save_grad_with_name('all'))
             self.hooks.append(handle)
+        
+        t1 *= 1000
+        t2 *= 1000
+        t3 *= 1000
+        t4 *= 1000
+        logger_py.info("pre-rendering time: {:.3f}; rendering time: {:.3f}; post-rendering time: {:.3f}".format(t2-t1, t3-t2, t4-t3))
 
         return point_clouds, rgb, mask
 

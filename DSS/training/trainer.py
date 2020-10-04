@@ -36,6 +36,7 @@ from ..misc import Thread
 from ..misc.visualize import figures_to_html, plot_2D_quiver, plot_3D_quiver
 from ..utils import ImageSaliencySampler, intersection_with_unit_sphere, valid_value_mask
 
+import time
 
 class BaseTrainer(object):
     def __init__(self, model: nn.Module, optimizer: optim.Optimizer,
@@ -362,6 +363,7 @@ class Trainer(BaseTrainer):
             it (int): training iteration
         '''
         # Initialize loss dictionary and other values
+        t1 = time.time()
         loss = {}
 
         # overwrite n_points
@@ -385,10 +387,13 @@ class Trainer(BaseTrainer):
         # 1.) Initialize loss
         loss['loss'] = 0
         pcl_filters = None
+        torch.cuda.synchronize()
+        t2 = time.time()
         if isinstance(self.model, PointModel):
             point_clouds, img_pred, mask_img_pred = self.model(
                 mask_img, cameras=cameras)
-
+        torch.cuda.synchronize()
+        t3 = time.time()
         # else:
         #     # 1.) Sample points on image plane ("pixels")
         #     p = self.sample_pixels(n_points, img, it=it)
@@ -416,10 +421,21 @@ class Trainer(BaseTrainer):
                                   mask_img.squeeze(1),
                                   mask_img_pred.squeeze(-1),
                                   'mean', loss=loss)
+                torch.cuda.synchronize()
+                t4 = time.time()
             # Projection and Repulsion loss
             self.calc_pcl_reg_loss(
                 point_clouds, reduction_method, loss, it=it
             )
+            torch.cuda.synchronize()
+            t5 = time.time()
+        
+        t1 *= 1000
+        t2 *= 1000
+        t3 *= 1000
+        t4 *= 1000
+        t5 *= 1000
+        logger_py.warning("pre: {:.2f}; render: {:.2f}; dr_loss: {:.2f}; reg_loss: {:.2f};".format(t2-t1, t3-t2, t4-t3, t5-t4))
 
 
         for k, v in loss.items():
@@ -504,7 +520,8 @@ class Trainer(BaseTrainer):
         #         # point_clouds, rebuild_knn=(it % 10 == 0), points_filter=self.model.points_filter) * self.lambda_dr_repel
         #         point_clouds, rebuild_knn=True, points_filter=self.model.points_filter) * self.lambda_dr_repel
         if self.lambda_dr_proj > 0 or self.lambda_dr_repel > 0:
-            proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter)
+            # proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=(it % 10), points_filter=self.model.points_filter)
+            proj_loss, repel_loss = self.regularization_loss(point_clouds, rebuild_nn=True, points_filter=self.model.points_filter)
             proj_loss *= self.lambda_dr_proj
             repel_loss *= self.lambda_dr_repel
 
