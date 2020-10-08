@@ -311,6 +311,7 @@ class EllipticalRasterizer(autograd.Function):
                                                                 cloud_to_packed_first_idx, num_points_per_cloud,
                                                                 radii_s, depth_merging_threshold)
             else:
+                # print("use occ backward")
                 grads_input = _C._splat_points_occ_backward(pts_screen, ellipse_param, cutoff_threshold, radii,
                                                             idx, zbuf0, occ_grad, zbuf_grad,
                                                             cloud_to_packed_first_idx, num_points_per_cloud,

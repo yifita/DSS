@@ -25,6 +25,8 @@ from pytorch3d.structures import Meshes
 from pytorch3d.renderer import PerspectiveCameras, look_at_view_transform, MeshRasterizer, RasterizationSettings
 from pytorch3d.loss.point_mesh_distance import point_face_distance
 
+import time
+
 logger_py = get_logger(__name__)
 
 
@@ -169,23 +171,30 @@ class RegularizationLoss(BaseLoss):
         logger_py.error("loss_frnn_radius: {}".format(loss_frnn_radius))
 
     def _build_nn(self, point_clouds, use_frnn=True):
-        logger_py.error("build nn")
         with torch.autograd.enable_grad():
             points_padded = point_clouds.points_padded()
 
         lengths = point_clouds.num_points_per_cloud()
         if self.frnn_radius > 0:
+            t1 = time.time()
+            print("loss frnn", points_padded.shape)
             dists, idxs, nn, _ = frnn.frnn_grid_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, r=self.frnn_radius, return_nn=True,
             )
+            torch.cuda.synchronize()
+            t2 = time.time()
+            logger_py.info("reg loss frnn time: {:.2f}".format((t2-t1)*1000))
             self.nn_mask = (idxs != -1)
             assert(torch.all(dists[~self.nn_mask] == -1))
         else:
-            # logger_py.warning("KNN")
-            logger_py.info("loss knn points")
+            # logger_py.info("loss knn points")
+            t1 = time.time()
             dists, idxs, nn = ops.knn_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, return_nn=True
             )
+            torch.cuda.synchronize()
+            t2 = time.time()
+            logger_py.info("reg loss knn time: {:.2f}".format((t2-t1)*1000))
             self.nn_mask = torch.full(
                 idxs.shape, False, dtype=torch.bool, device=points_padded.device
             )
@@ -209,7 +218,6 @@ class RegularizationLoss(BaseLoss):
         if self.frnn_radius > 0:
             nn_normals = frnn.frnn_gather(normals, self.nn_tree.idxs, lengths)
         else:
-            # logger_py.warning("KNN")
             nn_normals = ops.knn_gather(normals, self.nn_tree.idxs, lengths)
         normals_denoised = torch.sum(nn_normals * weights[:, :, :, None], dim=-2) / \
             eps_denom(torch.sum(weights, dim=-1, keepdim=True))
@@ -277,7 +285,6 @@ class RegularizationLoss(BaseLoss):
         if self.frnn_radius > 0:
             nn_normals = frnn.frnn_gather(normals, self.nn_tree.idxs, lengths)
         else:
-            # logger_py.warning("KNN")
             nn_normals = ops.knn_gather(normals, self.nn_tree.idxs, lengths)
         normals = torch.nn.functional.normalize(normals, dim=-1)
         nn_normals = torch.nn.functional.normalize(nn_normals, dim=-1)
@@ -351,7 +358,6 @@ class RegularizationLoss(BaseLoss):
         # - projected distance dot(ni, x-xi)
         # - multiply and normalize the weights
         with torch.autograd.no_grad():
-            logger_py.error("rebuild_nn: {}".format(rebuild_nn))
             if rebuild_nn or self.nn_tree is None or self.nn_tree.idxs.shape[:2] != points_padded.shape[:2]:
                 self._build_nn(point_clouds)
 
@@ -379,7 +385,6 @@ class RegularizationLoss(BaseLoss):
             # weights_repel[~self.nn_mask] = 0.0
 
             if self.frnn_radius <= 0:
-                # logger_py.warning("KNN")
                 # we are using knn
                 # outside filter_scale*local_point_spacing weights
                 mask_ball_query = self.nn_tree.dists > (self.filter_scale *
@@ -394,7 +399,6 @@ class RegularizationLoss(BaseLoss):
                 point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
 
         else:
-            # logger_py.warning("KNN")
             nn_normals = ops.knn_gather(
                 point_clouds.normals_padded(), self.nn_tree.idxs, lengths)
 
@@ -412,7 +416,6 @@ class RegularizationLoss(BaseLoss):
             weights_repel = normal_w * spatial_w_repel * density_w_repel
             weights_repel[~self.nn_mask] = 0
             if self.frnn_radius <= 0:
-                # logger_py.warning("KNN")
                 weights_repel[mask_ball_query] = 0
         
         deltap = points_projected[:, :, None, :] - self.nn_tree.nn.detach()
@@ -420,7 +423,6 @@ class RegularizationLoss(BaseLoss):
             # logger_py.info(str(deltap.shape)+str(self.nn_mask.shape))
             point_to_point_dist = torch.sum(deltap * deltap * self.nn_mask[..., None], dim=-1)
         else:
-            # logger_py.warning("KNN")
             point_to_point_dist = torch.sum(deltap * deltap, dim=-1)
         
 

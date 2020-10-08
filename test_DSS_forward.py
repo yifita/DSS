@@ -48,8 +48,10 @@ class TestDSSForward(unittest.TestCase):
     return output
 
 def bm_frnn():
-  benchmark(TestDSSForward.nn, "knn", [{"cfg_fname":"configs/donut_dss_knn.yml"}], num_iters=5, warmup_iters=1)
-  benchmark(TestDSSForward.nn, "frnn", [{"cfg_fname":"configs/donut_dss_frnn.yml"}], num_iters=5, warmup_iters=1)
+  # benchmark(TestDSSForward.nn, "knn", [{"cfg_fname":"configs/donut_dss_knn.yml"}], num_iters=5, warmup_iters=1)
+  # benchmark(TestDSSForward.nn, "frnn", [{"cfg_fname":"configs/donut_dss_frnn.yml"}], num_iters=5, warmup_iters=1)
+  benchmark(TestDSSForward.nn, "knn", [{"cfg_fname":"configs/torus_dss_knn.yml"}], num_iters=5, warmup_iters=1)
+  benchmark(TestDSSForward.nn, "frnn", [{"cfg_fname":"configs/torus_dss_frnn.yml"}], num_iters=5, warmup_iters=1)
 
 if __name__ == "__main__":
   bm_frnn()

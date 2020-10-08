@@ -242,13 +242,22 @@ class Trainer(BaseTrainer):
         Returns:
             loss
         """
+        t1 = time.time()
         self.model.train()
         self.optimizer.zero_grad()
         it = kwargs.get("it", None)
+        torch.cuda.synchronize()
+        t2 = time.time()
         data, cameras = self.process_data_dict(data, cameras)
+        torch.cuda.synchronize()
+        t3 = time.time()
         # autograd.set_detect_anomaly(True)
         loss = self.compute_loss(data, cameras, it=it)
+        torch.cuda.synchronize()
+        t4 = time.time()
         loss.backward()
+        torch.cuda.synchronize()
+        t5 = time.time()
         if self.clip_grad:
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), max_norm=1.)
@@ -256,6 +265,17 @@ class Trainer(BaseTrainer):
         check_weights(self.model.state_dict())
         if hasattr(self, 'training_scheduler'):
             self.training_scheduler.step(self, it)
+        torch.cuda.synchronize()
+        t6 = time.time()
+        t1 *= 1000
+        t2 *= 1000
+        t3 *= 1000
+        t4 *= 1000
+        t5 *= 1000
+        t6 *= 1000
+        logger_py.info("pre: {:.2f}; data: {:.2f}; forward: {:.2f}; backward: {:.2f}; update: {:.2f}".format(
+            t2-t1, t3-t2, t4-t3, t5-t4, t6-t5
+        ))
         return loss.item()
 
     def process_data_dict(self, data, cameras):
@@ -435,7 +455,7 @@ class Trainer(BaseTrainer):
         t3 *= 1000
         t4 *= 1000
         t5 *= 1000
-        logger_py.warning("pre: {:.2f}; render: {:.2f}; dr_loss: {:.2f}; reg_loss: {:.2f};".format(t2-t1, t3-t2, t4-t3, t5-t4))
+        logger_py.info("pre: {:.2f}; render: {:.2f}; dr_loss: {:.2f}; reg_loss: {:.2f};".format(t2-t1, t3-t2, t4-t3, t5-t4))
 
 
         for k, v in loss.items():

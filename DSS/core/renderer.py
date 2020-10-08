@@ -110,7 +110,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
             num_points_per_cloud = pointclouds.num_points_per_cloud()
             if self.frnn_radius <= 0:
                 # use knn here
-                logger_py.info("vrk knn points")
+                # logger_py.info("vrk knn points")
                 sq_dist, _, _ = ops3d.knn_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7)
@@ -170,13 +170,22 @@ class SurfaceSplattingRenderer(PointsRenderer):
             num_points_per_cloud = pointclouds.num_points_per_cloud()
             if self.frnn_radius <= 0:
                 # logger_py.info("vrk knn points")
+                t1 = time.time()
                 sq_dist, _, _ = ops3d.knn_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
-                                                 K=3)
+                                                 K=7)
+                torch.cuda.synchronize()
+                t2 = time.time()
+                logger_py.info("knn_points time: {:.2f}".format((t2-t1)*1000))
             else:
+                t1 = time.time()
+                print(pts_world.shape)
                 sq_dist, _, _, _ = frnn.frnn_grid_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7, r=self.frnn_radius)
+                torch.cuda.synchronize()
+                t2 = time.time()
+                logger_py.info("frnn_points time: {:.2f}".format((t2-t1)*1000))
             # sq_dist_gt = sq_dist.clone().detach()
             # sq_dist_gt[sq_dist_gt > 0.5*0.5] = -1
             # for i in range(sq_dist2.shape[0]):

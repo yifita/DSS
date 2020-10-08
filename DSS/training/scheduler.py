@@ -12,7 +12,7 @@ class TrainerScheduler(object):
     def __init__(self, init_n_points_dss: int, init_n_rays: int, init_dss_backward_radii: float,
                  steps_n_points_dss: int, steps_n_rays: int, steps_dss_backward_radii: int,
                  gamma_n_points_dss: float = 2.0, gamma_n_rays: float = 0.5,
-                 limit_n_points_dss: int = 1e5, limit_n_rays: int = 0,
+                 limit_n_points_dss: int = 5e5, limit_n_rays: int = 0,
                  gamma_dss_backward_radii: float = 0.99, limit_dss_backward_radii: float = 1.5,):
         """ steps_n_points_dss: list  """
 
