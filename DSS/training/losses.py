@@ -176,25 +176,17 @@ class RegularizationLoss(BaseLoss):
 
         lengths = point_clouds.num_points_per_cloud()
         if self.frnn_radius > 0:
-            t1 = time.time()
             print("loss frnn", points_padded.shape)
             dists, idxs, nn, _ = frnn.frnn_grid_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, r=self.frnn_radius, return_nn=True,
             )
-            torch.cuda.synchronize()
-            t2 = time.time()
-            logger_py.info("reg loss frnn time: {:.2f}".format((t2-t1)*1000))
             self.nn_mask = (idxs != -1)
             assert(torch.all(dists[~self.nn_mask] == -1))
         else:
             # logger_py.info("loss knn points")
-            t1 = time.time()
             dists, idxs, nn = ops.knn_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, return_nn=True
             )
-            torch.cuda.synchronize()
-            t2 = time.time()
-            logger_py.info("reg loss knn time: {:.2f}".format((t2-t1)*1000))
             self.nn_mask = torch.full(
                 idxs.shape, False, dtype=torch.bool, device=points_padded.device
             )

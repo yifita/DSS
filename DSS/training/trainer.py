@@ -242,22 +242,13 @@ class Trainer(BaseTrainer):
         Returns:
             loss
         """
-        t1 = time.time()
         self.model.train()
         self.optimizer.zero_grad()
         it = kwargs.get("it", None)
-        torch.cuda.synchronize()
-        t2 = time.time()
         data, cameras = self.process_data_dict(data, cameras)
-        torch.cuda.synchronize()
-        t3 = time.time()
         # autograd.set_detect_anomaly(True)
         loss = self.compute_loss(data, cameras, it=it)
-        torch.cuda.synchronize()
-        t4 = time.time()
         loss.backward()
-        torch.cuda.synchronize()
-        t5 = time.time()
         if self.clip_grad:
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), max_norm=1.)
@@ -265,17 +256,6 @@ class Trainer(BaseTrainer):
         check_weights(self.model.state_dict())
         if hasattr(self, 'training_scheduler'):
             self.training_scheduler.step(self, it)
-        torch.cuda.synchronize()
-        t6 = time.time()
-        t1 *= 1000
-        t2 *= 1000
-        t3 *= 1000
-        t4 *= 1000
-        t5 *= 1000
-        t6 *= 1000
-        logger_py.info("pre: {:.2f}; data: {:.2f}; forward: {:.2f}; backward: {:.2f}; update: {:.2f}".format(
-            t2-t1, t3-t2, t4-t3, t5-t4, t6-t5
-        ))
         return loss.item()
 
     def process_data_dict(self, data, cameras):
@@ -383,7 +363,6 @@ class Trainer(BaseTrainer):
             it (int): training iteration
         '''
         # Initialize loss dictionary and other values
-        t1 = time.time()
         loss = {}
 
         # overwrite n_points
@@ -407,13 +386,9 @@ class Trainer(BaseTrainer):
         # 1.) Initialize loss
         loss['loss'] = 0
         pcl_filters = None
-        torch.cuda.synchronize()
-        t2 = time.time()
         if isinstance(self.model, PointModel):
             point_clouds, img_pred, mask_img_pred = self.model(
                 mask_img, cameras=cameras)
-        torch.cuda.synchronize()
-        t3 = time.time()
         # else:
         #     # 1.) Sample points on image plane ("pixels")
         #     p = self.sample_pixels(n_points, img, it=it)
@@ -441,23 +416,11 @@ class Trainer(BaseTrainer):
                                   mask_img.squeeze(1),
                                   mask_img_pred.squeeze(-1),
                                   'mean', loss=loss)
-                torch.cuda.synchronize()
-                t4 = time.time()
             # Projection and Repulsion loss
             self.calc_pcl_reg_loss(
                 point_clouds, reduction_method, loss, it=it
             )
-            torch.cuda.synchronize()
-            t5 = time.time()
         
-        t1 *= 1000
-        t2 *= 1000
-        t3 *= 1000
-        t4 *= 1000
-        t5 *= 1000
-        logger_py.info("pre: {:.2f}; render: {:.2f}; dr_loss: {:.2f}; reg_loss: {:.2f};".format(t2-t1, t3-t2, t4-t3, t5-t4))
-
-
         for k, v in loss.items():
             mode = 'val' if eval_mode else 'train'
             if isinstance(v, torch.Tensor):

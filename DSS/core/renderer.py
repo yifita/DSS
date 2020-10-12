@@ -170,22 +170,14 @@ class SurfaceSplattingRenderer(PointsRenderer):
             num_points_per_cloud = pointclouds.num_points_per_cloud()
             if self.frnn_radius <= 0:
                 # logger_py.info("vrk knn points")
-                t1 = time.time()
                 sq_dist, _, _ = ops3d.knn_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7)
-                torch.cuda.synchronize()
-                t2 = time.time()
-                logger_py.info("knn_points time: {:.2f}".format((t2-t1)*1000))
             else:
-                t1 = time.time()
                 print(pts_world.shape)
                 sq_dist, _, _, _ = frnn.frnn_grid_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7, r=self.frnn_radius)
-                torch.cuda.synchronize()
-                t2 = time.time()
-                logger_py.info("frnn_points time: {:.2f}".format((t2-t1)*1000))
             # sq_dist_gt = sq_dist.clone().detach()
             # sq_dist_gt[sq_dist_gt > 0.5*0.5] = -1
             # for i in range(sq_dist2.shape[0]):
@@ -562,7 +554,6 @@ class SurfaceSplattingRenderer(PointsRenderer):
         cutoff_threshold
         """
 
-        t1 = time.time()
         if point_clouds.isempty():
             return None
 
@@ -582,8 +573,6 @@ class SurfaceSplattingRenderer(PointsRenderer):
 
         if point_clouds.isempty():
             return None
-        torch.cuda.synchronize()
-        t2 = time.time()
 
         # compute per-point features for elliptical gaussian weights
         with torch.autograd.no_grad():
@@ -592,14 +581,10 @@ class SurfaceSplattingRenderer(PointsRenderer):
 
         per_point_info['cutoff_threshold'] = cutoff_thres_alpha * \
             per_point_info['cutoff_threshold']
-        torch.cuda.synchronize()
-        t3 = time.time()
 
         # rasterize
         fragments = self.rasterizer(
             point_clouds, per_point_info, **kwargs)
-        torch.cuda.synchronize()
-        t4 = time.time()
 
         # compute weight: scalar*exp(-0.5Q)
         frag_scaler = gather_with_neg_idx(
@@ -626,8 +611,6 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 **kwargs
             )
         images = images.clamp(0, 1)
-        torch.cuda.synchronize()
-        t5 = time.time()
 
         # permute so image comes at the end
         images = images.permute(0, 2, 3, 1)
@@ -651,8 +634,6 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 valid_depth_mask.float(), first_idx, max_P).bool()
             point_clouds_filter.set_filter(
                 visibility=original_visibility_mask)
-        torch.cuda.synchronize()
-        t6 = time.time()
 
 
         if verbose:
@@ -664,16 +645,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 original_per_point_info[k][valid_depth_mask] = per_point_info[k]
 
             return images, original_per_point_info, fragments
-        t1 *= 1000
-        t2 *= 1000
-        t3 *= 1000
-        t4 *= 1000
-        t5 *= 1000
-        t6 *= 1000
-        logger_py.info("pre: {:.2f}; per-point: {:.2f}; rasterize: {:.2f}; compositor: {:.2f}; post {:.2f}".format(
-            t2-t1, t3-t2, t4-t3, t5-t4, t6-t5
-        ))
-        return images
+       return images
 
 
 class SurfaceDiscRenderer(SurfaceSplattingRenderer):

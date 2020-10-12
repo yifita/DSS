@@ -149,7 +149,7 @@ dictitems:
       texture: DSS.models.common.Texture
       texture_kwargs: *id010
       type: point
-  name: torus_dss_frnn_0.1_0.1
+  name: torus_dss_frnn_no_timing
   renderer: &id020 !!python/object/new:easydict.EasyDict
     dictitems:
       composite_params: &id011 !!python/object:easydict.EasyDict {}
@@ -327,7 +327,7 @@ state:
   data: *id017
   generation: *id018
   model: *id019
-  name: torus_dss_frnn_0.1_0.1
+  name: torus_dss_frnn_no_timing
   renderer: *id020
   rendering: *id021
   test: *id022
