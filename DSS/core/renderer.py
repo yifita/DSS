@@ -47,7 +47,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 self.compositor.__class__.__name__))
 
         self.frnn_radius = frnn_radius
-        logger_py.error("frnn_radius: {}".format(frnn_radius))
+        # logger_py.error("frnn_radius: {}".format(frnn_radius))
 
     def to(self, device):
         super().to(device)
@@ -174,7 +174,6 @@ class SurfaceSplattingRenderer(PointsRenderer):
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7)
             else:
-                print(pts_world.shape)
                 sq_dist, _, _, _ = frnn.frnn_grid_points(pts_world, pts_world,
                                                  num_points_per_cloud, num_points_per_cloud,
                                                  K=7, r=self.frnn_radius)
@@ -532,8 +531,10 @@ class SurfaceSplattingRenderer(PointsRenderer):
             point_clouds = point_clouds.extend(cameras.R.shape[0])
 
         # render points whose depth is > focal_length or znear
+        valid_depth_mask_first_idx = point_clouds.cloud_to_packed_first_idx()
         point_clouds, valid_depth_mask = self._filter_points_with_invalid_depth(
             point_clouds, **kwargs)
+
 
         # new point clouds containing only points facing towards the camera
         if self.backface_culling:
@@ -545,7 +546,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
                                         True, dtype=torch.bool,
                                         device=point_clouds.device)
 
-        return point_clouds, valid_depth_mask, frontface_mask
+        return point_clouds, valid_depth_mask, frontface_mask, valid_depth_mask_first_idx
 
     def forward(self, point_clouds, point_clouds_filter=None, verbose=False, cutoff_thres_alpha=1.0,
                 **kwargs) -> torch.Tensor:
@@ -568,8 +569,17 @@ class SurfaceSplattingRenderer(PointsRenderer):
         first_idx = point_clouds.cloud_to_packed_first_idx()
         batch_size = len(point_clouds)
 
-        point_clouds, valid_depth_mask, frontface_mask = self.filter_renderable(
+        # lixin
+        point_clouds, valid_depth_mask, frontface_mask, valid_depth_mask_first_idx = self.filter_renderable(
             point_clouds, cameras, point_clouds_filter)
+        # point_clouds, valid_depth_mask, frontface_mask = self.filter_renderable(
+        #     point_clouds, cameras, point_clouds_filter)
+
+        # lixin
+        # P = point_clouds.num_points_per_cloud().sum().item()
+        # max_P = point_clouds.num_points_per_cloud().max().item()
+        # first_idx = point_clouds.cloud_to_packed_first_idx()
+        # batch_size = len(point_clouds)
 
         if point_clouds.isempty():
             return None
@@ -630,8 +640,11 @@ class SurfaceSplattingRenderer(PointsRenderer):
             # we use this information in projection loss
             # put all_depth_visibility_mask (num_active) to original_visibility_mask (P,)
             # transform to padded
+            # original_visibility_mask = ops3d.packed_to_padded(
+            #     valid_depth_mask.float(), first_idx, max_P).bool()
+            # lixin
             original_visibility_mask = ops3d.packed_to_padded(
-                valid_depth_mask.float(), first_idx, max_P).bool()
+                valid_depth_mask.float(), valid_depth_mask_first_idx, max_P).bool()
             point_clouds_filter.set_filter(
                 visibility=original_visibility_mask)
 
@@ -645,7 +658,7 @@ class SurfaceSplattingRenderer(PointsRenderer):
                 original_per_point_info[k][valid_depth_mask] = per_point_info[k]
 
             return images, original_per_point_info, fragments
-       return images
+        return images
 
 
 class SurfaceDiscRenderer(SurfaceSplattingRenderer):

@@ -39,7 +39,7 @@ dictitems:
       generation_dir: generation
       mesh_extension: ply
       padding: 0.0
-      points_batch_size: 500000
+      points_batch_size: 8000
       refine_max_faces: 10000
       refinement_step: 2
       resolution0: 16
@@ -53,7 +53,7 @@ dictitems:
       generation_dir: generation
       mesh_extension: ply
       padding: 0.0
-      points_batch_size: 500000
+      points_batch_size: 8000
       refine_max_faces: 10000
       refinement_step: 2
       resolution0: 16
@@ -112,7 +112,7 @@ dictitems:
           learn_normals: true
           learn_points: true
           learn_size: false
-          n_points_per_cloud: 500000
+          n_points_per_cloud: 8000
           point_scale_range: &id005
           - 0.3
           - 1.5
@@ -122,7 +122,7 @@ dictitems:
           learn_normals: true
           learn_points: true
           learn_size: false
-          n_points_per_cloud: 500000
+          n_points_per_cloud: 8000
           point_scale_range: *id005
           uniform_projection: true
       texture: DSS.models.common.Texture

@@ -112,7 +112,7 @@ dictitems:
           learn_normals: true
           learn_points: true
           learn_size: false
-          n_points_per_cloud: 400000
+          n_points_per_cloud: 10000
           point_scale_range: &id005
           - 0.3
           - 1.5
@@ -122,7 +122,7 @@ dictitems:
           learn_normals: true
           learn_points: true
           learn_size: false
-          n_points_per_cloud: 400000
+          n_points_per_cloud: 10000
           point_scale_range: *id005
           uniform_projection: true
       texture: DSS.models.common.Texture
@@ -149,7 +149,7 @@ dictitems:
       texture: DSS.models.common.Texture
       texture_kwargs: *id010
       type: point
-  name: donut_dss_knn_0.1_0.1
+  name: donut_dss_frnn_0.1_0.1
   renderer: &id020 !!python/object/new:easydict.EasyDict
     dictitems:
       composite_params: &id011 !!python/object:easydict.EasyDict {}
@@ -327,7 +327,7 @@ state:
   data: *id017
   generation: *id018
   model: *id019
-  name: donut_dss_knn_0.1_0.1
+  name: donut_dss_frnn_0.1_0.1
   renderer: *id020
   rendering: *id021
   test: *id022

@@ -168,15 +168,15 @@ class RegularizationLoss(BaseLoss):
         self.filter_scale = filter_scale
         self.sharpness_sigma = sharpness_sigma
         self.frnn_radius = loss_frnn_radius
-        logger_py.error("loss_frnn_radius: {}".format(loss_frnn_radius))
+        # logger_py.error("loss_frnn_radius: {}".format(loss_frnn_radius))
 
     def _build_nn(self, point_clouds, use_frnn=True):
+        # logger_py.info("rebuild nn")
         with torch.autograd.enable_grad():
             points_padded = point_clouds.points_padded()
 
         lengths = point_clouds.num_points_per_cloud()
         if self.frnn_radius > 0:
-            print("loss frnn", points_padded.shape)
             dists, idxs, nn, _ = frnn.frnn_grid_points(
                 points_padded, points_padded, lengths, lengths, K=self.nn_k, r=self.frnn_radius, return_nn=True,
             )
