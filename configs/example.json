@@ -1,0 +1,58 @@
+{
+  "name": "donut_dss_frnn",
+  "data": {
+    "type": "MVR",
+    "source": "a.ply",
+    "data_dir": "data",
+    "depth_range": [1, 25]
+  },
+  "model": {
+    "learn_points": true,
+    "learn_normals": true,
+    "learn_colors": false,
+    "learn_point_size": false,
+    "num_points": 10000,
+    "point_scale_range": [0.3, 1.5],
+    "uniform projection": true
+  },
+  "renderer": {
+    "renderer_type": "DSS.core.renderer.SurfaceSplattingRenderer",
+    "renderer_params": {
+      "backface_culling": true,
+      "frnn_radius": 0.2
+    },
+    "raster_type": "DSS.core.rasterizer.SurfaceSplatting",
+    "raster_params": {
+      "Vrk_isotropic": true,
+      "backward_rbf": false,
+      "cutoff_threshold": 0.5,
+      "depth_merging_threshold": 0.02,
+      "image_size": 512,
+      "points_per_pixel": 5,
+      "radii_backward_scaler": 5
+    },
+    "composite_type": "pytorch3d.renderer.NormWeightedCompositor"
+  },
+  "training": {
+    "batch_size": 8,
+    "clip_grad": false,
+    "lambda_dr_rgb": 1.0,
+    "lambda_dr_silhouette": 1.0,
+    "lambda_dr_proj": 0.1,
+    "lambda_dr_repel": 0.1,
+    "learning_rate": 0.1,
+    "log_file": "train.log",
+    "model_selection_metric": "loss",
+    "model_selection_mode": "minimize",
+    "checkpoint_every": 200,
+    "print_every": 10,
+    "debug_every": -1,
+    "prune_every": 100,
+    "backup_every": 50000,
+    "visualize_every": 100,
+    "validate_every": -1,
+    "scheduler_gamma": 0.5,
+    "scheduler_milestones": [2000, 4000],
+    "out_dir": "exp"
+  }
+}

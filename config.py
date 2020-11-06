@@ -1,6 +1,5 @@
-import yaml
 import os
-from easydict import EasyDict as edict
+import json
 import torch
 import pytorch3d
 import trimesh
@@ -13,8 +12,6 @@ from DSS.training.trainer import Trainer
 from DSS import set_debugging_mode_
 from DSS import logger_py
 
-
-# General config
 def load_config(path, default_path=None):
     ''' Loads config file.
 
@@ -23,31 +20,49 @@ def load_config(path, default_path=None):
         default_path (bool): whether to use default path
     '''
     # Load configuration from file itself
-    cfg_special = None
-    with open(path, 'r') as f:
-        cfg_special = edict(yaml.load(f, Loader=yaml.Loader))
-
-    # Check if we should inherit from a config
-    inherit_from = cfg_special.get('inherit_from')
-
-    # If yes, load this config first as default
-    # If no, use the default_path
-    if inherit_from is not None:
-        cfg = load_config(inherit_from, default_path)
-    elif default_path is not None:
+    if path is None:
         with open(default_path, 'r') as f:
-            cfg = edict(yaml.load(f, Loader=yaml.Loader))
+            cfg = json.load(f)
     else:
-        cfg = edict()
-
-    # Include main configuration
-    update_recursive(cfg, cfg_special)
-
-    # cross reference some options used internally
-    if cfg.training.lambda_depth > 0:
-        cfg.data.load_dense_depth = True
-
+        with open(path, 'r') as f:
+            cfg = json.load(f)
     return cfg
+
+
+# General config
+# def load_config(path, default_path=None):
+#     ''' Loads config file.
+# 
+#     Args:
+#         path (str): path to config file
+#         default_path (bool): whether to use default path
+#     '''
+#     # Load configuration from file itself
+#     cfg_special = None
+#     with open(path, 'r') as f:
+#         cfg_special = edict(yaml.load(f, Loader=yaml.Loader))
+# 
+#     # Check if we should inherit from a config
+#     inherit_from = cfg_special.get('inherit_from')
+# 
+#     # If yes, load this config first as default
+#     # If no, use the default_path
+#     if inherit_from is not None:
+#         cfg = load_config(inherit_from, default_path)
+#     elif default_path is not None:
+#         with open(default_path, 'r') as f:
+#             cfg = edict(yaml.load(f, Loader=yaml.Loader))
+#     else:
+#         cfg = edict()
+# 
+#     # Include main configuration
+#     update_recursive(cfg, cfg_special)
+# 
+#     # cross reference some options used internally
+#     if cfg.training.lambda_depth > 0:
+#         cfg.data.load_dense_depth = True
+# 
+#     return cfg
 
 
 def save_config(path, config):
@@ -63,26 +78,42 @@ def save_config(path, config):
             "Found file existing in {}, overwriting the existing file.".format(out_dir))
 
     with open(path, 'w') as f:
-        yaml.dump(config, f)
+        json.dump(config, f)
 
     logger_py.info("Saved config to {}".format(path))
 
+# def save_config(path, config):
+#     """
+#     Save config dictionary as json file
+#     """
+#     out_dir = os.path.dirname(path)
+#     if not os.path.exists(out_dir):
+#         os.makedirs(out_dir)
+# 
+#     if os.path.isfile(path):
+#         logger_py.warn(
+#             "Found file existing in {}, overwriting the existing file.".format(out_dir))
+# 
+#     with open(path, 'w') as f:
+#         yaml.dump(config, f)
+# 
+#     logger_py.info("Saved config to {}".format(path))
 
-def update_recursive(dict1, dict2):
-    ''' Update two config dictionaries recursively.
-
-    Args:
-        dict1 (dict): first dictionary to be updated
-        dict2 (dict): second dictionary which entries should be used
-
-    '''
-    for k, v in dict2.items():
-        if k not in dict1:
-            dict1[k] = edict()
-        if isinstance(v, dict):
-            update_recursive(dict1[k], v)
-        else:
-            dict1[k] = v
+# def update_recursive(dict1, dict2):
+#     ''' Update two config dictionaries recursively.
+# 
+#     Args:
+#         dict1 (dict): first dictionary to be updated
+#         dict2 (dict): second dictionary which entries should be used
+# 
+#     '''
+#     for k, v in dict2.items():
+#         if k not in dict1:
+#             dict1[k] = edict()
+#         if isinstance(v, dict):
+#             update_recursive(dict1[k], v)
+#         else:
+#             dict1[k] = v
 
 
 def _get_tensor_with_default(opt, key, size, fill_value=0.0):

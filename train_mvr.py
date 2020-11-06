@@ -13,12 +13,12 @@ from common import create_animation
 from im2mesh.checkpoints import CheckpointIO
 from DSS import logger_py, get_debugging_mode, set_deterministic_
 
-set_deterministic_()
-
+# for speed consideration
+# set_deterministic_()
 
 # Arguments
 parser = argparse.ArgumentParser(
-    description='Train implicit representations without 3D supervision.'
+    description='Deform point clouds with images taken from multiple views'
 )
 parser.add_argument('config', type=str, help='Path to config file.')
 parser.add_argument('--no-cuda', action='store_true', help='Do not use cuda.')
@@ -27,7 +27,8 @@ parser.add_argument('--exit-after', type=int, default=-1,
                          'seconds with exit code 2.')
 
 args = parser.parse_args()
-cfg = config.load_config(args.config, 'configs/default.yaml')
+# cfg = config.load_config(args.config, 'configs/default.yaml')
+cfg = config.load_config(args.config, "configs/example.json")
 
 is_cuda = (torch.cuda.is_available() and not args.no_cuda)
 device = torch.device("cuda" if is_cuda else "cpu")
@@ -38,8 +39,8 @@ backup_every = cfg['training']['backup_every']
 exit_after = args.exit_after
 lr = cfg['training']['learning_rate']
 batch_size = cfg['training']['batch_size']
-batch_size_val = cfg['training']['batch_size_val']
-n_workers = cfg['training']['n_workers']
+# batch_size_val = cfg['training']['batch_size_val']
+# n_workers = cfg['training']['n_workers']
 model_selection_metric = cfg['training']['model_selection_metric']
 if cfg['training']['model_selection_mode'] == 'maximize':
     model_selection_sign = 1
@@ -51,29 +52,29 @@ else:
 
 # Set mesh extraction to low resolution for fast visuliation
 # during training
-cfg['generation']['resolution0'] = 16
-cfg['generation']['refinement_step'] = 2
+# cfg['generation']['resolution0'] = 16
+# cfg['generation']['refinement_step'] = 2
 
 # Output directory
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
 # Begin logging also to the log file
-fileHandler = logging.FileHandler(os.path.join(out_dir, cfg.training.logfile))
+fileHandler = logging.FileHandler(os.path.join(out_dir, cfg['training']['log_file']))
 fileHandler.setLevel(logging.DEBUG)
 logger_py.addHandler(fileHandler)
 
 # Data
-train_dataset = config.create_dataset(cfg.data, mode='train')
+train_dataset = config.create_dataset(cfg['data'], mode='train')
 train_loader = torch.utils.data.DataLoader(
     train_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
     collate_fn=tolerating_collate,
 )
-val_dataset = config.create_dataset(cfg.data, mode='val')
-val_loader = torch.utils.data.DataLoader(
-    val_dataset, batch_size=batch_size_val, num_workers=int(n_workers // 2),
-    shuffle=False, collate_fn=tolerating_collate,
-)
+# val_dataset = config.create_dataset(cfg.data, mode='val')
+# val_loader = torch.utils.data.DataLoader(
+#     val_dataset, batch_size=batch_size_val, num_workers=int(n_workers // 2),
+#     shuffle=False, collate_fn=tolerating_collate,
+# )
 # data_viz = next(iter(val_loader))
 model = config.create_model(cfg, dataset=train_dataset, device=device)
 
