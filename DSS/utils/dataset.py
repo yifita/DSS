@@ -94,6 +94,8 @@ class MVRDataset(data.Dataset):
             import point_cloud_utils as pcu
             meshes = self.get_meshes()
             # sample on the mesh with poisson disc sampling
+            points_list = []
+            normals_list = []
             for i in range(len(meshes)):
                 mesh = meshes[i]
                 points, normals = pcu.sample_mesh_poisson_disk(
@@ -101,7 +103,9 @@ class MVRDataset(data.Dataset):
                     mesh.verts_normals_packed().cpu().numpy(), num_points, use_geodesic_distance=True)
                 points = torch.from_numpy(points)
                 normals = torch.from_numpy(normals)
-            self.point_clouds = PointClouds3D([points], [normals])
+                points_list.append(points)
+                normals_list.append(normals)
+            self.point_clouds = PointClouds3D(points_list, normals_list)
 
         return self.point_clouds
 
