@@ -78,6 +78,8 @@ class MVRDataset(data.Dataset):
         else:
             self.depth_files = None
 
+        self.load_all_files()
+
     def get_pointclouds(self, num_points=None) -> PointClouds3D:
         """ Returns points, normals and color in object coordinate """
         if hasattr(self, 'point_clouds'):
@@ -133,6 +135,29 @@ class MVRDataset(data.Dataset):
         self.cameras = Camera(**self.data_dict["cameras_params"].item())
         return self.cameras
 
+    def load_all_files(self):
+        """ load all data into memory to save time"""
+        self.rgb_list = []
+        assert(len(self.image_files == self.mask_files))
+        self.item_list = []
+        for i in range(len(self.image_files)):
+            rgb = imageio.imread(self.image_files[i]).astype(np.float32)[..., :3] / 255.0
+            mask = imageio.imread(self.mask_files[i], pilmode="L").astype(np.bool)[..., None]
+            assert(rgb.shape[:2] == mask.shape[:2]
+                   ), "rgb {} and mask {} images must have the same dimensions.".format(rgb.shape, mask.shape)
+            assert(rgb.shape[2] == 3 and rgb.ndim ==
+                   3), "Invalid RGB image shape {}".format(rgb.shape)
+            assert(mask.shape[2] == 1 and mask.ndim ==
+                   3), "Invalid Mask image shape {}".format(mask.shape)
+            # transpose only changes the strides, doesn't touch the actual array
+            rgb = np.ascontiguousarray(np.transpose(rgb, [2, 0, 1]))
+            mask = np.ascontiguousarray(np.transpose(mask, [2, 0, 1]))
+            camera_mat = np.array(self.data_dict['camera_mat'][i]).astype(np.float32)
+
+            out_data = {"img.rgb": rgb, "img.mask": mask, "camera_mat": camera_mat}
+            self.item_list.append(out_data)
+        return
+
     def __len__(self):
         ''' Returns the length of the dataset.
         '''
@@ -147,6 +172,8 @@ class MVRDataset(data.Dataset):
                        "img.depth: depth (1,H,W),
                        "shape.mesh": Meshes}
         """
+        if self.item_list is not None:
+            return self.item_list[idx]
         # load rgb
         rgb = np.array(imageio.imread(
             self.image_files[idx])).astype(np.float32)[..., :3] / 255.0
