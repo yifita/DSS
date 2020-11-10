@@ -137,7 +137,7 @@ class MVRDataset(data.Dataset):
 
     def load_all_files(self):
         """ load all data into memory to save time"""
-        assert(len(self.image_files == self.mask_files))
+        assert(len(self.image_files) == len(self.mask_files))
         self.item_list = []
         for i in range(len(self.image_files)):
             rgb = imageio.imread(self.image_files[i]).astype(np.float32)[..., :3] / 255.0

@@ -20,7 +20,7 @@ import time
 
 class Model(nn.Module):
     def __init__(self, points, normals, colors, renderer, texture=None,
-                 learn_points=True, learn_normals=True, learn_colors=True, learn_size=True,
+                 learn_points=True, learn_normals=True, learn_colors=True, learn_point_size=True,
                  point_scale_range=(0.5, 1.5),
                  device='cpu', **kwargs):
         """
@@ -43,7 +43,7 @@ class Model(nn.Module):
         self.colors = nn.Parameter(colors.to(device=device)).requires_grad_(
             learn_colors)
         self.point_size_scaler = nn.Parameter(
-            torch.tensor(1.0)).requires_grad_(learn_size)
+            torch.tensor(1.0)).requires_grad_(learn_point_size)
         assert(len(point_scale_range) == 2 and point_scale_range[1] >= point_scale_range[0]), \
             "point_scale_range ({}, {}) is not valid".format(
                 point_scale_range[0], point_scale_range[1])
@@ -104,7 +104,6 @@ class Model(nn.Module):
         self.points_filter.to(pointclouds.device)
 
         if filter_inactive:
-            self.points_filter.to(pointclouds.device)
             pointclouds = self.points_filter.filter_with(
                 pointclouds, ('activation',))
 

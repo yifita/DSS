@@ -13,7 +13,7 @@ class TestDSSForward(unittest.TestCase):
   @staticmethod
   def nn(cfg_fname):
     cfg = config.load_config(cfg_fname, 'configs/default.yaml')
-    train_dataset = config.create_dataset(cfg.data, mode='train')
+    train_dataset = config.create_dataset(cfg['data'], mode='train')
     train_loader = torch.utils.data.DataLoader(
       train_dataset, batch_size=cfg['training']['batch_size'],
       collate_fn=tolerating_collate

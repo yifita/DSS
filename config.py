@@ -171,7 +171,7 @@ def create_cameras(opt):
 
 def create_dataset(opt_data, mode="train"):
     import DSS.utils.dataset as DssDataset
-    if opt_data.type == 'MVR':
+    if opt_data['type'] == 'MVR':
         dataset = DssDataset.MVRDataset(**opt_data, mode=mode)
     else:
         raise NotImplementedError
@@ -186,7 +186,7 @@ def create_model(cfg, device, mode="train", **kwargs):
         device (device): pytorch device
     '''
     lights = None
-    if cfg.renderer.lighting == 'from_data':
+    if cfg['renderer']['lighting'] == 'from_data':
         try:
             dataset = kwargs['dataset']
             lights = dataset.get_lights().to(device=device)
@@ -196,9 +196,9 @@ def create_model(cfg, device, mode="train", **kwargs):
     texture = LightingTexture(specular=False, lights=lights)
 
     Model = get_class_from_string(
-        "DSS.models.{}_modeling.Model".format(cfg.model.type))
+        "DSS.models.{}_modeling.Model".format(cfg['model']['type']))
 
-    if cfg.model.type == 'point':
+    if cfg['model']['type'] == 'point':
         # use non-parameterized point renderer
         mesh_path = cfg['data']['source']
         if mesh_path is not None:
@@ -225,7 +225,7 @@ def create_model(cfg, device, mode="train", **kwargs):
                 return_normals=True)
 
         colors = torch.ones_like(points)
-        renderer = create_renderer(cfg.renderer).to(device)
+        renderer = create_renderer(cfg['renderer']).to(device)
         model = Model(
             points, normals, colors,
             renderer,
@@ -247,13 +247,14 @@ def create_generator(cfg, model, device, **kwargs):
         cfg (dict): imported yaml config
         device (device): pytorch device
     '''
-    decoder = cfg.model.decoder
+    # decoder = cfg['model']['decoder']
+    decoder = None
     Generator = get_class_from_string(
-        'DSS.models.{}_modeling.Generator'.format(cfg.model.type))
+        'DSS.models.{}_modeling.Generator'.format(cfg['model']['type']))
 
-    generator = Generator(model, device,
-                          threshold=cfg['test']['threshold'],
-                          **cfg.generation)
+    generator = Generator(model, device) #,
+                          # threshold=cfg['test']['threshold'],
+                          #**cfg['generation'])
     return generator
 
 
@@ -268,14 +269,17 @@ def create_trainer(cfg, model, optimizer, scheduler, generator, device, **kwargs
         generator (Generator): generator instance to
             generate meshes for visualization
     '''
-    threshold = cfg['test']['threshold']
+    # threshold = cfg['test']['threshold']
+    threshold = 0.1
     out_dir = os.path.join(cfg['training']['out_dir'], cfg['name'])
     vis_dir = os.path.join(out_dir, 'vis')
     debug_dir = os.path.join(out_dir, 'debug')
     log_dir = os.path.join(out_dir, 'logs')
     val_dir = os.path.join(out_dir, 'val')
-    depth_from_visual_hull = cfg['data']['depth_from_visual_hull']
-    depth_range = cfg['data']['depth_range']
+    # depth_from_visual_hull = cfg['data']['depth_from_visual_hull']
+    # depth_range = cfg['data']['depth_range']
+    depth_from_visual_hull = False
+    depth_range = [0.1, 25]
 
     trainer = Trainer(
         model, optimizer, scheduler, generator=generator,
@@ -284,31 +288,31 @@ def create_trainer(cfg, model, optimizer, scheduler, generator, device, **kwargs
         threshold=threshold,
         depth_from_visual_hull=depth_from_visual_hull,
         depth_range=depth_range,
-        **cfg.training)
+        **cfg['training'])
 
     return trainer
 
 
 def create_renderer(render_opt):
     """ Create rendere """
-    Renderer = get_class_from_string(render_opt.renderer_type)
-    Raster = get_class_from_string(render_opt.raster_type)
-    i = render_opt.raster_type.rfind('.')
-    raster_setting_type = render_opt.raster_type[:i] + \
+    Renderer = get_class_from_string(render_opt['renderer_type'])
+    Raster = get_class_from_string(render_opt['raster_type'])
+    i = render_opt['raster_type'].rfind('.')
+    raster_setting_type = render_opt['raster_type'][:i] + \
         '.PointsRasterizationSettings'
-    if render_opt.compositor_type is not None:
-        Compositor = get_class_from_string(render_opt.compositor_type)
+    if render_opt['compositor_type'] is not None:
+        Compositor = get_class_from_string(render_opt['compositor_type'])
         compositor = Compositor()
     else:
         compositor = None
 
     RasterSetting = get_class_from_string(raster_setting_type)
-    raster_settings = RasterSetting(**render_opt.raster_params)
+    raster_settings = RasterSetting(**render_opt['raster_params'])
 
     renderer = Renderer(
         rasterizer=Raster(
             cameras=None, raster_settings=raster_settings),
         compositor=compositor,
-        **render_opt.renderer_params
+        **render_opt['renderer_params']
     )
     return renderer

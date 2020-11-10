@@ -71,7 +71,7 @@ train_loader = torch.utils.data.DataLoader(
     # not sure why we are doing this
     # collate_fn=tolerating_collate,
 )
-# val_dataset = config.create_dataset(cfg.data, mode='val')
+# val_dataset = config.create_dataset(cfg['data'], mode='val')
 # val_loader = torch.utils.data.DataLoader(
 #     val_dataset, batch_size=batch_size_val, num_workers=int(n_workers // 2),
 #     shuffle=False, collate_fn=tolerating_collate,
@@ -87,7 +87,7 @@ except Exception as e:
     raise e
 
 # Optimizer
-if cfg.model.type == 'point':
+if cfg['model']['type'] == 'point':
     optimizer = optim.SGD(
         [p for p in model.parameters() if p.requires_grad], lr=lr)
 else:
@@ -162,7 +162,7 @@ while True:
             logger_py.info('[Epoch %02d] it=%03d, loss=%.4f, time=%.4f'
                            % (epoch_it, it, loss, time.time() - t0b))
             t0b = time.time()
-            if cfg.model.model_kwargs['learn_size']:
+            if cfg['model']['learn_point_size']:
                 logger_py.info('point size scaler = %.3g' % trainer.model.point_size_scaler)
 
         # Debug visualization
@@ -171,7 +171,7 @@ while True:
             trainer.debug(batch, cameras=cameras, it=it,
                           mesh_gt=train_dataset.get_meshes())
         # Prune points
-        if it > 0 and (cfg.training.prune_every > 0) and (it % cfg.training.prune_every == 0):
+        if it > 0 and (cfg['training']['prune_every'] > 0) and (it % cfg['training']['prune_every'] == 0):
             trainer.prune(train_loader, cameras=cameras, n_views=16)
 
         # Save checkpoint
