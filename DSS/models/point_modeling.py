@@ -52,6 +52,8 @@ class Model(nn.Module):
         self.renderer = renderer.to(device=device)
         self.texture = texture.to(device=device) if texture is not None else LightingTexture(
             specular=False, device=device)
+        # to be saved and restored in state_dict, but not trained ->
+        # register as buffers so that they won't be returned in model.parameters()
         self.register_buffer('points_activation', torch.full(
             self.points.shape[:2], True, device=device, dtype=torch.bool))
         self.points_filter = PointCloudsFilters(

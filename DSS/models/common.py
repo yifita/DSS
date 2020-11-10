@@ -7,16 +7,6 @@ import torch.nn.functional as F
 from collections import OrderedDict
 from ..utils import get_class_from_string
 
-"""
-SIREN
-https://github.com/vsitzmann/siren
-
-DVR
-
-Lipman
-"""
-
-
 class Texture(nn.Module):
     def __init__(self, dim=3, c_dim=256,
                  n_layers=4, hidden_size=512, out_dim=3,

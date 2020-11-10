@@ -78,17 +78,21 @@ def pol2cart(rho, phi):
     return (x, y)
 
 
-def read_ply(file):
+def read_ply_with_normals(file):
     loaded = plyfile.PlyData.read(file)
     points = np.vstack([loaded['vertex'].data['x'],
-                        loaded['vertex'].data['y'], loaded['vertex'].data['z']])
+                        loaded['vertex'].data['y'], 
+                        loaded['vertex'].data['z']])
+    normals = None
     if 'nx' in loaded['vertex'].data.dtype.names:
         normals = np.vstack([loaded['vertex'].data['nx'],
-                             loaded['vertex'].data['ny'], loaded['vertex'].data['nz']])
+                             loaded['vertex'].data['ny'], 
+                             loaded['vertex'].data['nz']])
+        normals = np.ascontiguousarray(normals)
         points = np.concatenate([points, normals], axis=0)
 
-    points = points.transpose(1, 0)
-    return points
+    points = np.ascontiguousarray(points.transpose(1, 0))
+    return points, normals
 
 
 def save_ply(filename, points, colors=None, normals=None, binary=True):

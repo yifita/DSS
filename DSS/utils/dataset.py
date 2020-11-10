@@ -137,7 +137,6 @@ class MVRDataset(data.Dataset):
 
     def load_all_files(self):
         """ load all data into memory to save time"""
-        self.rgb_list = []
         assert(len(self.image_files == self.mask_files))
         self.item_list = []
         for i in range(len(self.image_files)):
@@ -153,8 +152,14 @@ class MVRDataset(data.Dataset):
             rgb = np.ascontiguousarray(np.transpose(rgb, [2, 0, 1]))
             mask = np.ascontiguousarray(np.transpose(mask, [2, 0, 1]))
             camera_mat = np.array(self.data_dict['camera_mat'][i]).astype(np.float32)
-
             out_data = {"img.rgb": rgb, "img.mask": mask, "camera_mat": camera_mat}
+
+            # load dense depth map
+            if self.depth_files is not None:
+                depth = np.array(imageio.imread(self.depth_files[i])).astype(np.float32)
+                depth = depth.reshape(mask.shape)
+                out_data['img.depth'] = depth
+
             self.item_list.append(out_data)
         return
 
@@ -169,9 +174,9 @@ class MVRDataset(data.Dataset):
             data dict {"img.rgb": rgb (C,H,W),
                        "img.mask": mask (1,H,W),
                        "camera_mat": camera_mat (4,4),
-                       "img.depth: depth (1,H,W),
-                       "shape.mesh": Meshes}
+                       "img.depth: depth (1,H,W)}
         """
+        # use files loaded in memory
         if self.item_list is not None:
             return self.item_list[idx]
         # load rgb

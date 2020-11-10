@@ -6,11 +6,13 @@ import trimesh
 import numpy as np
 from pytorch3d.utils import ico_sphere
 from pytorch3d.ops import sample_points_from_meshes
+from pytorch3d.io import load_obj
 from DSS.core.texture import LightingTexture, NeuralTexture
 from DSS.utils import get_class_from_string
 from DSS.training.trainer import Trainer
 from DSS import set_debugging_mode_
 from DSS import logger_py
+from DSS.utils.io import read_ply_with_normals
 
 def load_config(path, default_path=None):
     ''' Loads config file.
@@ -183,57 +185,45 @@ def create_model(cfg, device, mode="train", **kwargs):
         cfg (edict): imported yaml config
         device (device): pytorch device
     '''
-    decoder = cfg['model']['decoder']
-    encoder = cfg['model']['encoder']
-
-    if mode == 'test' and cfg.model.type == 'combined':
-        cfg.model.type = 'implicit'
-
-    if cfg.model.type == 'point':
-        decoder = None
-
-    if decoder is not None:
-        c_dim = cfg['model']['c_dim']
-        Decoder = get_class_from_string(cfg.model.decoder)
-        decoder = Decoder(
-            c_dim=c_dim, dim=3, **cfg.model.decoder_kwargs).to(device=device)
-        logger_py.info("Created Decoder {}".format(decoder.__class__))
-        logger_py.info(decoder)
-
-    texture = None
-    use_lighting = (cfg.model.type == 'occupancy' and
-                    cfg.model.decoder_kwargs.out_dim == 1) or \
-                   (cfg.renderer is not None and not cfg.renderer.get(
-                       'is_neural_texture', True))
-    if use_lighting:
-        lights = None
-        if cfg.renderer.lighting == 'from_data':
-            try:
-                dataset = kwargs['dataset']
-                lights = dataset.get_lights().to(device=device)
-            except Exception as e:
-                logger_py.exception('Cannot load lights from data.')
-                raise e
-        texture = LightingTexture(specular=False, lights=lights)
-    else:
-        Texture = get_class_from_string(cfg.model.texture)
-        texture_decoder = Texture(c_dim=(cfg.model.decoder_kwargs['out_dim'] - 1),
-                                  **cfg.model.texture_kwargs)
-        texture = NeuralTexture(decoder=texture_decoder).to(device=device)
-        logger_py.info("Created NeuralTexture {}".format(texture.__class__))
-        logger_py.info(texture)
+    lights = None
+    if cfg.renderer.lighting == 'from_data':
+        try:
+            dataset = kwargs['dataset']
+            lights = dataset.get_lights().to(device=device)
+        except Exception as e:
+            logger_py.exception('Cannot load lights from data.')
+            raise e
+    texture = LightingTexture(specular=False, lights=lights)
 
     Model = get_class_from_string(
         "DSS.models.{}_modeling.Model".format(cfg.model.type))
 
     if cfg.model.type == 'point':
-        # if not using decoder, then use non-parameterized point renderer
-        # create icosphere as initial point cloud
-        sphere_mesh = ico_sphere(level=4)
-        sphere_mesh.scale_verts_(0.5)
-        points, normals = sample_points_from_meshes(
-            sphere_mesh, num_samples=int(cfg['model']['model_kwargs']['n_points_per_cloud']),
-            return_normals=True)
+        # use non-parameterized point renderer
+        mesh_path = cfg['data']['source']
+        if mesh_path is not None:
+            # we support reading from ply/obj file
+            # load and normalize mesh
+            if os.path.splitext(mesh_path)[1].lower() == ".ply":
+                # we assume the normals are given
+                points, normals = read_ply_with_normals(mesh_path)
+            elif os.path.splitext(mesh_path)[1].lower() == ".obj":
+                points, faces, aux = load_obj(mesh_path)
+                normals = aux.normals
+            else:
+                raise NotImplementedError
+            if len(points.shape) == 2:
+                points = points[None, ...]
+            if len(normals.shape) == 2:
+                normals = normals[None, ...]
+        else:
+            # create icosphere as initial point cloud if the source is not specified
+            source_mesh = ico_sphere(level=4)
+            source_mesh.scale_verts_(0.5)
+            points, normals = sample_points_from_meshes(
+                source_mesh, num_samples=cfg['data']['source_points'],
+                return_normals=True)
+
         colors = torch.ones_like(points)
         renderer = create_renderer(cfg.renderer).to(device)
         model = Model(
@@ -241,61 +231,10 @@ def create_model(cfg, device, mode="train", **kwargs):
             renderer,
             device=device,
             texture=texture,
-            **cfg.model.model_kwargs,
+            **cfg['model'],
         ).to(device=device)
-
-    elif cfg.model.type == 'occupancy':
-        depth_function_kwargs = cfg['model']['depth_function_kwargs']
-        # Add the depth range to depth function kwargs
-        depth_range = cfg['data']['depth_range']
-        depth_function_kwargs['depth_range'] = depth_range
-        depth_function_kwargs['schedule_milestones'] = cfg['training']['scheduler_milestones']
-
-        depth_function_kwargs['is_occupancy'] = True
-        model = Model(
-            decoder, encoder=encoder, renderer=None,
-            depth_function_kwargs=depth_function_kwargs, device=device,
-            dtheta_freespace=cfg.model.dtheta_freespace,
-            texture=texture, depth_range=depth_range,
-            occupancy_random_normal=cfg.training.occupancy_random_normal,
-            use_cube_intersection=cfg.training.use_cube_intersection
-        )
-
-    elif cfg.model.type == 'implicit':
-        model = Model(decoder, renderer=None,
-                      texture=texture, encoder=encoder, device=device, **cfg.model.model_kwargs)
-
-    elif cfg.model.type == 'combined':
-        renderer = create_renderer(cfg.renderer).to(device)
-        # TODO: load
-        points = None
-        point_file = os.path.join(
-            cfg.training.out_dir, cfg.name, cfg.training.point_file)
-        if os.path.isfile(point_file):
-            # load point or mesh then sample
-            loaded_shape = trimesh.load(point_file)
-            n_points = cfg.model.model_kwargs['n_points_per_cloud']
-            try:
-                # reject sampling can produce less points, hence sample more
-                points = trimesh.sample.sample_surface_even(loaded_shape,
-                                                            int(n_points * 1.1),
-                                                            radius=0.01)[0]
-                p_idx = np.random.permutation(
-                    loaded_shape.vertices.shape[0])[:n_points]
-                points = points[p_idx, ...]
-            except Exception:
-                # randomly
-                p_idx = np.random.permutation(loaded_shape.vertices.shape[0])[
-                    :n_points]
-                points = loaded_shape.vertices[p_idx, ...]
-
-            points = torch.tensor(points, dtype=torch.float, device=device)
-
-        model = Model(
-            decoder, renderer, texture=texture, encoder=encoder, device=device, points=points,
-            **cfg.model.model_kwargs)
     else:
-        ValueError('model type must be combined|point|implicit')
+        ValueError('model type must be "point"')
 
     return model
 

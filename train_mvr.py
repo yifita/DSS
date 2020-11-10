@@ -68,7 +68,8 @@ logger_py.addHandler(fileHandler)
 train_dataset = config.create_dataset(cfg['data'], mode='train')
 train_loader = torch.utils.data.DataLoader(
     train_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
-    collate_fn=tolerating_collate,
+    # not sure why we are doing this
+    # collate_fn=tolerating_collate,
 )
 # val_dataset = config.create_dataset(cfg.data, mode='val')
 # val_loader = torch.utils.data.DataLoader(
