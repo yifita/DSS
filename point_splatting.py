@@ -1,13 +1,11 @@
 import torch
 import os
-import argparse
 import numpy as np
 from itertools import chain
 from glob import glob
-from DSS.core.renderer import createSplatter
-from DSS.utils.splatterIo import saveAsPng, readScene, readCloud, getBasename, writeCameras
-from DSS.utils.trainer import CameraSampler
-from DSS.options.render_options import RenderOptions
+from DSS.core.renderer import SurfaceSplattingRenderer
+
+""" Render object in 360 angles """
 
 if __name__ == "__main__":
     opt = RenderOptions().parse()
@@ -70,5 +68,4 @@ if __name__ == "__main__":
                 else:
                     cmax = None
                 saveAsPng(gt.cpu(), keyName + '_cam%02d.png' % i, cmin=0, cmax=cmax)
-            # stacked = torch.stack(rendered, dim=0)
             # np.save(keyName+'_views.npy', stacked.cpu().numpy())

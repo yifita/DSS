@@ -1,0 +1,93 @@
+name: "demo"
+data:
+  type: DTU
+  data_dir: "example_data"
+  data_dict: "data_dict.npz"
+  img_folder: image
+  mask_folder: mask
+  depth_folder: depth
+  img_extension: png
+  img_extension_input: jpg
+  mask_extension: png
+  depth_extension: exr
+  img_with_camera: true
+  img_with_mask: true
+  depth_range: [0.1, 25]
+  depth_from_visual_hull: false
+  n_imgs: null
+  sample_metric: loss_rgb
+  resolution: [1200, 1600]
+renderer:
+  is_neural_texture: False
+  renderer_type: DSS.core.renderer.SurfaceSplattingRenderer
+  raster_type: DSS.core.rasterizer.SurfaceSplatting
+  raster_params:
+    backface_culling: false
+    Vrk_isotropic: true
+    backward_rbf: false
+    bin_size: 0
+    clip_pts_grad: 0.05
+    cutoff_threshold: 0.5
+    depth_merging_threshold: 0.005
+    image_size: 256
+    max_points_per_bin: null
+    points_per_pixel: 5
+    radii_backward_scaler: 5
+  compositor_type: pytorch3d.renderer.NormWeightedCompositor
+  composite_params: {}
+  lighting: 'from_data'
+  # 'from_data' | 'default'
+  # from_data: use ground truth lighting (in this case learn_colors should be false)
+  # default: use white ambient light, in this case learn_normals shoudl be false
+model:
+  type: combined
+  encoder: null
+  decoder: DSS.models.combined_modeling.Decoder
+  model_kwargs:
+    learn_points: true
+    learn_normals: true
+    learn_size: false
+    learn_colors: False
+    point_scale_range: [0.3, 1.5]
+    n_points_per_cloud: 8000
+training:
+  out_dir:  exp
+  # loss when renderer to get predicted image
+  lambda_dr_rgb: 1.0
+  lambda_dr_silhouette: 1.0
+  lambda_dr_proj: 0.1
+  lambda_dr_repel: 0.1
+  batch_size: 1
+  batch_size_val: 1
+  patch_size: 1
+  print_every: 10
+  checkpoint_every: 500
+  visualize_every: 100
+  validate_every: 1000
+  clip_grad: true
+  learning_rate: 0.0001
+  scheduler_milestones: [200, 500]
+  scheduler_gamma: 0.5
+  n_workers: 1
+  logfile: train.log
+  overwrite_visualization: false
+  multi_gpu: false
+  debug_every: 100
+  n_debug_points: -1
+  resume_from: model.pt
+  point_file: shape_pts.ply
+  model_selection_metric: chamfer
+  model_selection_mode: minimize
+generation:
+  batch_size: 1
+  vis_n_outputs: 30
+  generation_dir: generation
+  refinement_step: -1
+  points_batch_size: 100000
+  with_colors: true
+  with_normals: true
+  mesh_extension: ply
+test:
+  eval_file_name: eval_meshes
+  threshold: 0.0
+  model_file: model_best.pt

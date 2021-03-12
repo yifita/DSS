@@ -1,3 +1,9 @@
-[submodule "pytorch_points"]
-	path = pytorch_points
-	url = https://github.com/yifita/pytorch_points
+[submodule "external/prefix_sum"]
+	path = external/prefix_sum
+	url = https://github.com/lxxue/prefix_sum.git
+[submodule "external/FRNN"]
+	path = external/FRNN
+	url = https://github.com/lxxue/FRNN.git
+[submodule "external/torch-batch-svd"]
+	path = external/torch-batch-svd
+	url = https://github.com/KinglittleQ/torch-batch-svd.git

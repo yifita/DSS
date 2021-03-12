@@ -1,9 +1,5 @@
-import argparse
-import os
-import torch
-import pdb
 from .base_options import BaseOptions
-import json
+import yaml
 
 
 class FilterOptions(BaseOptions):
@@ -39,7 +35,7 @@ class FilterOptions(BaseOptions):
         self.opt.modifiers = ["localNormals", "localPoints"]
         self.opt.isFiltering = True
         with open(self.opt.source, "r") as f:
-            targetJson = json.load(f)
+            targetJson = yaml.load(f)
             if "cmdLineArgs" in targetJson:
                 self.parser.set_defaults(**targetJson["cmdLineArgs"])
         self.opt, _ = self.parser.parse_known_args()

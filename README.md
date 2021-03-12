@@ -6,74 +6,55 @@
 
 code for paper Differentiable Surface Splatting for Point-based Geometry Processing
 
-- [DSS: Differentiable Surface Splatting](#dss-differentiable-surface-splatting)
-  - [installation](#installation)
-  - [Demos](#demos)
-      - [inverse rendering - shape deformation](#inverse-rendering---shape-deformation)
-        - [2D grid to teapot](#2d-grid-to-teapot)
-        - [sphere to teapot](#sphere-to-teapot)
-        - [cube to yoga](#cube-to-yoga)
-      - [denoising](#denoising)
-    - [other functions](#other-functions)
-      - [render object 360 degree](#render-object-360-degree)
-  - [video](#video)
-  - [cite](#cite)
-  - [Acknowledgement](#acknowledgement)
-
-
+```diff
++ Mar 2021: major updates tag 2.0. Code shares the same structure as pytorch3d. See the Changelog
+```
 
 ## installation
 1. clone
 ````bash
-git clone --recursive https://gitlab.inf.ethz.ch/OU-SORKINE/dss.git
+git clone --recursive https://github.com/yifita/DSS.git
 cd dss
 ````
-2. install prequisitories. Our code uses python3.7, the installation instruction requires the latest anaconda.
+2. install prequisitories. Our code uses python3.8, pytorch 1.6.1, pytorch3d. the installation instruction requires the latest anaconda.
 ````bash
 # install cuda, cudnn, nccl from nvidia
-# we tested with cuda 10.1, cudnn 7.5, nccl 1.3.5
+# we tested with cuda 11.1, cudnn 7.5, nccl 1.3.5
 # update conda
 conda update -n base -c defaults conda
 # install requirements
 conda config --add channels pytorch
 conda config --add channels conda-forge
-conda create --name DSS --file requirements.txt
-conda activate DSS
+conda create -n pytorch3d python=3.8
+conda activate pytorch3d
+conda install -c pytorch pytorch=1.6.0 torchvision cudatoolkit=10.2
+conda install -c conda-forge -c fvcore -c iopath fvcore iopath
+conda install --file requirements.txt
 # plyfile package is not on conda
 pip install plyfile
 ````
-3. compile cuda library
+3. compile cuda libraries in external
 ````bash
-cd pytorch_points
+cd external
+cd prefix_sum
+python setup.py install
+cd ..
+cd FRNN
+python setup.py install
+cd ..
+cd torch-batch-svd
 python setup.py install
 cd ..
 python setup.py develop
 ````
 ## Demos
+### inverse rendering - shape deformation
 
-#### inverse rendering - shape deformation
-##### 2D grid to teapot
 ```bash
-python learn_shape_from_target.py -t example_data/scenes/good_teapot.json
+python train_mvr.py --config configs/dss_proj.yml
 ```
-![teapot_2D](images/2D_teapot.gif)
-##### sphere to teapot
-````bash
-# inverse rendering test: optimize point positions and normals to transform sphere to teapot
-python learn_shape_from_target.py example_data/scenes/sphere.json -t example_data/scenes/teapot.json
-````
-![teapot](images/teapot_3D.gif)
-##### cube to yoga
-```bash
-python learn_shape_from_target.py example_data/scenes/cube_20k.json  -t example_data/scenes/yoga6.json --name yoga6_z_paper_1
-````
-![yoga1](images/yoga6.gif)
-```bash
-python finetune_shape.py learn_examples/yoga6_z_paper_1/final_scene.json  -t example_data/scenes/yoga6.json --name yoga6_z_paper_1_1
-```
-![yoga2](images/yoga6-1.gif)
 
-#### denoising
+### denoising
 ```bash
 cd trained_models
 # unix system can run this command directly
@@ -110,8 +91,8 @@ convert -dispose 2 -delay 10 renders/teapot_360/*.png renders/teapot_360/animati
 Please cite us if you find the code useful!
 ```
 @article{Yifan:DSS:2019,
-author = {Yifan, Wang and 
-          Serena, Felice and 
+author = {Yifan, Wang and
+          Serena, Felice and
           Wu, Shihao and
           {\"{O}}ztireli, Cengiz and
          Sorkine{-}Hornung, Olga},
@@ -121,7 +102,7 @@ volume = {38},
 number = {6},
 year = {2019},
 }
-``` 
+```
 
 ## Acknowledgement
 We would like to thank Federico Danieli for the insightful discussion, Phillipp Herholz for the timely feedack, Romann Weber for the video voice-over and Derek Liu for the help during the rebuttal.

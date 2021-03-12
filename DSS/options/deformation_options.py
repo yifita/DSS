@@ -1,7 +1,3 @@
-import argparse
-import os
-import torch
-import pdb
 from .base_options import BaseOptions
 import json
 
@@ -18,7 +14,7 @@ class DeformationOptions(BaseOptions):
             if "cmdLineArgs" in targetJson:
                 self.parser.set_defaults(**targetJson["cmdLineArgs"])
         # parser again with new defaults
-        self.opt, _ = self.parser.parse_known_args()
+        # self.opt, _ = self.parser.parse_known_args()
         self.opt = super().parse()
         self.print_options(self.opt)
         return self.opt
