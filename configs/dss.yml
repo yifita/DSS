@@ -1,0 +1,43 @@
+name: dss_proj
+data:
+  type: MVR
+  data_dir: example_data/images/yoga6_variational_light
+model:
+  type: point
+  model_kwargs:
+    n_points_per_cloud: 5000
+    learn_colors: false
+    learn_points: true
+    learn_normals: true
+renderer:
+  is_neural_texture: false
+  raster_params:
+    Vrk_invariant: true
+    Vrk_isotropic: false
+    clip_pts_grad: 0.05
+    cutoff_threshold: 1.0
+    depth_merging_threshold: 0.05
+    image_size: 512
+    points_per_pixel: 5
+    radii_backward_scaler: 5
+  raster_type: DSS.core.rasterizer.SurfaceSplatting
+  renderer_type: DSS.core.renderer.SurfaceSplattingRenderer
+training:
+  backup_every: 1000
+  batch_size: 8
+  checkpoint_every: 400
+  debug_every: 100
+  lambda_dr_proj: 0.01
+  lambda_dr_repel: 0.0
+  lambda_dr_rgb: 1.0
+  lambda_dr_silhouette: 1.0
+  n_training_points: 0
+  n_workers: 0
+  point_file: shape_pts.ply
+  print_every: 10
+  scheduler_gamma: 0.5
+  visualize_every: 100
+  steps_dss_backward_radii: 200
+  gamma_dss_backward_radii: 0.9
+  limit_dss_backward_radii: 2
+type: MVR

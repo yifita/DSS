@@ -1,7 +1,7 @@
 import argparse
-import git
 import time
 import numpy as np
+import git
 import os
 import logging
 import config

@@ -18,7 +18,7 @@ from ..utils import slice_dict, check_weights
 from ..utils.mathHelper import decompose_to_R_and_t
 from ..training.losses import (
     IouLoss, ProjectionLoss, RepulsionLoss,
-    L2Loss, L1Loss, SmapeLoss, ImageGradientLoss)
+    L2Loss, L1Loss, SmapeLoss)
 from .scheduler import TrainerScheduler
 from ..models import PointModel
 from ..misc import Thread
@@ -140,8 +140,6 @@ class Trainer(BaseTrainer):
         self.l1_loss = L1Loss(reduction='mean')
         self.l2_loss = L2Loss(reduction='mean')
         self.smape_loss = SmapeLoss(reduction='mean')
-        self.image_gradient_loss = ImageGradientLoss(
-            reduction='mean', channel_dim=None)
 
     def evaluate_3d(self, val_dataloader, it, **kwargs):
         logger_py.info("[3D Evaluation]")
@@ -149,17 +147,17 @@ class Trainer(BaseTrainer):
         if not os.path.exists(self.val_dir):
             os.makedirs(self.val_dir)
 
-        pointcloud_tgt = val_dataloader.dataset.get_pointclouds(
-            num_points=self.n_eval_points)
-
         # create mesh using generator
         pointcloud = self.model.get_point_clouds(
             with_colors=False, with_normals=True,
             require_normals_grad=False)
 
-        cd_p, cd_n = chamfer_distance(pointcloud_tgt.points_padded(), pointcloud.points_padded,
+        pointcloud_tgt = val_dataloader.dataset.get_pointclouds(
+            num_points=self.n_eval_points).to(device=pointcloud.device)
+
+        cd_p, cd_n = chamfer_distance(pointcloud_tgt, pointcloud,
                          x_lengths=pointcloud_tgt.num_points_per_cloud(), y_lengths=pointcloud.num_points_per_cloud(),
-                         x_normals=pointcloud_tgt.normals_padded(), y_normals=pointcloud.normals_padded())
+                         )
         # save to "val" dict
         t1 = time.time()
         logger_py.info('[3D Evaluation] time ellapsed {}s'.format(t1 - t0))

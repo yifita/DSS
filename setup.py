@@ -56,7 +56,7 @@ ext_modules += [
     )
 ]
 
-INSTALL_REQUIREMENTS = ['numpy', 'torch', 'plyfile',]
+INSTALL_REQUIREMENTS = ['numpy', 'torch', 'plyfile', 'pytorch3d', 'imageio', 'frnn']
 
 setup(
     name='DSS',
@@ -64,7 +64,7 @@ setup(
     author='Yifan Wang, Lixin Xue and Felice Serena',
     packages=find_packages(exclude=('tests')),
     license='MIT License',
-    version='1.0',
+    version='2.0',
     install_requires=INSTALL_REQUIREMENTS,
     ext_modules=ext_modules,
     cmdclass={'build_ext': BuildExtension}

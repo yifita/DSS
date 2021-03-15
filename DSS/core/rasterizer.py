@@ -41,13 +41,19 @@ class PointsRasterizationSettings:
     Attributes:
     TODO: complete documentations
         cutoff_threshold (float): deciding whether inside the splat based on Q < cutoff_threshold
+        backface_culling (bool): render only the front-facing faces
+        depth_merging_threshold (float): depth threshold for determine zbuffer
+        Vrk_invariant: use 3D spheres of a uniform size to represent a point
+        Vrk_isotropic: use isotropic gaussian in the source space, otherwise compute anisotropic
+            gaussian variance
         radii_backward_scaler (float): the scaler used to increase the splat radius
             for backward pass, used for OccRBFBackward and OccBackward. If zero,
             then use WeightBackward, which contains gradients only for points
             rendered at the pixel.
-        backward_rbf: use radial based gradients from exp(-Q) for x and y, otherwise use 1/d^2*dx
-        Vrk_isotropic: use isotropic gaussian in the source space, otherwise compute an per-point
-            gaussian variance (TODO)
+        points_per_pixels (int): rasterize maximum of K points per pixel
+        bin_size (int): used for faster forward-pass
+        clip_pts_grad (float): clip per-point gradient using the gradient norm
+        antialiasing_sigma (float): gaussian sigma for anti-aliasing
     """
     __slots__ = [
         "cutoff_threshold",
@@ -60,10 +66,8 @@ class PointsRasterizationSettings:
         "points_per_pixel",
         "bin_size",
         "max_points_per_bin",
-        "backward_rbf",
         "clip_pts_grad",
         "antialiasing_sigma",
-        "density"
     ]
 
     def __init__(
@@ -78,10 +82,8 @@ class PointsRasterizationSettings:
         points_per_pixel: int = 8,
         bin_size: Optional[int] = 0,
         max_points_per_bin: Optional[int] = None,
-        backward_rbf: bool = False,
         clip_pts_grad: Optional[float] = -1,
         antialiasing_sigma: Optional[float] = 1.0,
-        density: Optional[float] = 1e-4,
     ):
         self.cutoff_threshold = cutoff_threshold
         self.backface_culling = backface_culling
@@ -93,10 +95,8 @@ class PointsRasterizationSettings:
         self.points_per_pixel = points_per_pixel
         self.bin_size = bin_size
         self.max_points_per_bin = max_points_per_bin
-        self.backward_rbf = backward_rbf
         self.clip_pts_grad = clip_pts_grad
-        self.antialiasing_sigma = 1.0
-        self.density = 1e-4
+        self.antialiasing_sigma = antialiasing_sigma
 
 
 class SurfaceSplatting(PointsRasterizer):
@@ -624,7 +624,6 @@ class SurfaceSplatting(PointsRasterizer):
             bin_size=raster_settings.bin_size,
             max_points_per_bin=raster_settings.max_points_per_bin,
             radii_backward_scaler=raster_settings.radii_backward_scaler,
-            backward_rbf=raster_settings.backward_rbf,
             clip_pts_grad=raster_settings.clip_pts_grad
         )
 
@@ -687,7 +686,6 @@ def rasterize_elliptical_points(pcls_screen, ellipse_params,
                                 bin_size: Optional[int] = None,
                                 max_points_per_bin: Optional[int] = None,
                                 radii_backward_scaler: float = 10.0,
-                                backward_rbf: bool = False,
                                 clip_pts_grad: float = -1.0):
     """
     Similar to default point rasterizer, with following differences:
@@ -742,7 +740,7 @@ def rasterize_elliptical_points(pcls_screen, ellipse_params,
         points_packed, ellipse_params, cutoff_threshold, radii,
         cloud_to_packed_first_idx, num_points_per_cloud,
         depth_merging_threshold, image_size, points_per_pixel, bin_size, max_points_per_bin,
-        radii_backward_scaler, backward_rbf)
+        radii_backward_scaler)
     return idx, zbuf, qvalue_map, occ_map
 
 
@@ -756,7 +754,7 @@ class EllipticalRasterizer(autograd.Function):
                 bin_size: int = 0,
                 max_points_per_bin: int = 0,
                 radii_backward_scaler: float = 10.0,
-                backward_rbf: bool = False):
+                ):
         """
         TODO: save if bin_points if bin_size is not 0, and reuse in the backward pass
         """
@@ -777,7 +775,6 @@ class EllipticalRasterizer(autograd.Function):
 
         ctx.radii_backward_scaler = radii_backward_scaler
         ctx.depth_merging_threshold = depth_merging_threshold
-        ctx.backward_rbf = backward_rbf
         if radii_backward_scaler == 0:
             ctx.save_for_backward(
                 pts_screen, idx, ellipse_param, cutoff_threshold)

@@ -1,9 +1,12 @@
 [submodule "external/prefix_sum"]
 	path = external/prefix_sum
 	url = https://github.com/lxxue/prefix_sum.git
+    ignore = untracked
 [submodule "external/FRNN"]
 	path = external/FRNN
 	url = https://github.com/lxxue/FRNN.git
+    ignore = untracked
 [submodule "external/torch-batch-svd"]
 	path = external/torch-batch-svd
 	url = https://github.com/KinglittleQ/torch-batch-svd.git
+    ignore = untracked

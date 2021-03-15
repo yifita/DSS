@@ -7,7 +7,7 @@ import numpy as np
 from .. import logger_py
 from ..core.cloud import PointClouds3D
 from . import get_class_from_string
-from .mathHelper import smooth_mesh_curvature, decompose_to_R_and_t
+from .mathHelper import decompose_to_R_and_t
 from pytorch3d.io.obj_io import load_objs_as_meshes
 from pytorch3d.structures import Meshes
 import pytorch3d.renderer.cameras as cameras
@@ -113,44 +113,26 @@ class MVRDataset(data.Dataset):
             colors = torch.tensor(self.data_dict["colors"]).to(dtype=torch.float32)
             self.point_clouds = PointClouds3D([points], [normals], [colors])
         else:
-            import point_cloud_utils as pcu
+            import pymeshlab
             meshes = self.get_meshes()
             # sample on the mesh with poisson disc sampling
             points_list = []
             normals_list = []
             for i in range(len(meshes)):
                 mesh = meshes[i]
-                points, normals = pcu.sample_mesh_poisson_disk(
-                    mesh.verts_packed().cpu().numpy(), mesh.faces_packed().cpu().numpy(),
-                    mesh.verts_normals_packed().cpu().numpy(), num_points, use_geodesic_distance=True)
-                p_idx = np.random.permutation(points.shape[0])[:num_points]
-                points = points[p_idx, ...]
-                normals = normals[p_idx, ...]
-                points = torch.from_numpy(points)
-                normals = torch.from_numpy(normals)
-                normals_list.append(normals)
-                points_list.append(points)
+                m = pymeshlab.Mesh(mesh.verts_packed().cpu().numpy(), mesh.faces_packed().cpu().numpy())
+                breakpoint()
+                ms = pymeshlab.MeshSet()
+                ms.add_mesh(m, 'mesh0')
+                ms.poisson_disk_sampling(samplenum=num_points, approximategeodesicdistance=True, exactnumflag=True)
+                m = ms.current_mesh()
+                points = m.vertex_matrix().astype(np.float32)
+                normals = m.vertex_normal_matrix().astype(np.float32)
+                points_list.append(torch.from_numpy(points))
+                normals_list.append(torch.from_numpy(normals))
             self.point_clouds = PointClouds3D(points_list, normals_list)
 
         return self.point_clouds
-
-    def get_curvatures(self):
-        """ Returns the mesh vertex curvature (smoothed) (N,) """
-        if hasattr(self, 'curvatures'):
-            return self.curvatures
-
-        meshes = self.get_meshes()
-        if os.path.isfile(laplace_file := os.path.join(self.data_dir, 'curvature.txt')):
-            curvatures = np.loadtxt(laplace_file)
-            assert(meshes.verts_packed().shape[0] == curvatures.shape[0])
-            curvatures = torch.from_numpy(curvatures).to(device=meshes.device, dtype=meshes.verts_packed().dtype)
-        else:
-            verts_packed = meshes.verts_packed()
-            curvatures = smooth_mesh_curvature(meshes, iters=5)
-            curvatures = curvatures * 1e3
-
-        self.curvatures = curvatures
-        return curvatures
 
     def get_meshes(self) -> Union[None, Meshes]:
         """ Returns ground truth mesh if exist """

@@ -6,18 +6,17 @@ Hui Huang, Dan Li, Hao Zhang, Uri Ascher Daniel Cohen-Or
 [3] Differentiable Surface Splatting for Point-based Geometry Processing
 Wang Yifan, Felice Serena, Shihao Wu, Cengiz Oeztireli, Olga Sorkine-Hornung
 """
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 from pytorch3d import ops
+from pytorch3d.ops import padded_to_packed
+from pytorch3d.ops.knn import _KNN as KNN
 from DSS.core.cloud import PointClouds3D
-from DSS.utils import LaplaceFilter
 from DSS.utils.mathHelper import eps_denom, estimate_pointcloud_normals
 from DSS import get_debugging_mode, get_debugging_tensor
 from DSS import get_logger
-from pytorch3d.ops import padded_to_packed
-from pytorch3d.ops.knn import _KNN as KNN
 
 logger_py = get_logger(__name__)
 
@@ -145,29 +144,6 @@ class L2Loss(BaseLoss):
         if mask is not None:
             lossImg = lossImg[mask]
         return lossImg
-
-
-class ImageGradientLoss(BaseLoss):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.edge_extractor = LaplaceFilter(k_gaussian=0,
-                                          nms=False,
-                                          thresholding=False,
-                                          )
-
-    def compute(self, x, y, mask=None, **kwargs):
-        """
-        Args:
-            x, y (tensor) of shape (N,C,H,W)
-            mask (tensor) of shape (N,H,W)
-        """
-        self.edge_extractor.to(x.device)
-        gradient_diff = self.edge_extractor(x) - self.edge_extractor(y)
-        gradient_loss = torch.abs(gradient_diff).squeeze(1)
-        if mask is not None:
-            gradient_loss = gradient_loss[mask]
-        return gradient_loss
-
 
 class SurfaceLoss(BaseLoss):
     def __init__(self, reduction='mean', knn_k: int = 33, filter_scale: float = 1.0, sharpness_sigma: float = 0.75):
