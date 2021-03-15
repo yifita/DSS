@@ -12,5 +12,4 @@ tensorboard==1.15.0
 tqdm
 trimesh==3.6.34
 point_cloud_utils
-Cython
 pymeshlab
