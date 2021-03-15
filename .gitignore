@@ -273,11 +273,8 @@ $RECYCLE.BIN/
 *.lnk
 
 
-# End of https://www.gitignore.io/api/vim,linux,macos,python,windows
-learn_examples/
 trained_models/**
-scripts/renders
-
+exp
 mypy/
 
 
