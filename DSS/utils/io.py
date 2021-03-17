@@ -1,11 +1,6 @@
 import torch
-import math
-import imageio
-import csv
 import os
 import plyfile
-import trimesh
-import json
 import numpy as np
 from matplotlib import cm
 import matplotlib.colors as mpc

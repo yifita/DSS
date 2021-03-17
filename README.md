@@ -59,9 +59,10 @@ python setup.py develop
 ### inverse rendering - shape deformation
 
 ```bash
-# create data
-example_data/yoga6_out.ply
-python train_mvr.py --config configs/dss_proj.yml
+# create mvr images using intrinsics defined in the script
+python scripts/create_mvr_data_from_mesh.py --points example_data/mesh/yoga6.ply --output example_data/images --num_cameras 128 --image-size 512 --tri_color_light --point_lights --has_specular
+
+python train_mvr.py --config configs/dss.yml
 ```
 
 ### ~~denoising (TBA)~~
