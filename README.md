@@ -64,6 +64,10 @@ python scripts/create_mvr_data_from_mesh.py --points example_data/mesh/yoga6.ply
 
 python train_mvr.py --config configs/dss.yml
 ```
+Check the optimization process in tensorboard.
+```
+tensorboard --logdir=exp/dss_proj
+```
 
 ### ~~denoising (TBA)~~
 We will add back this function ASAP.
