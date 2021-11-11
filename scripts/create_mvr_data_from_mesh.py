@@ -187,7 +187,7 @@ if __name__ == "__main__":
         pcl_dict['colors'] = data_dict['colors']
 
         idx = 0
-        for c_idx, cams in tqdm(camera_sampler):
+        for cams in tqdm(camera_sampler):
             meshes_batch = meshes.extend(batch_size)
             cams = cams.to(device)
 

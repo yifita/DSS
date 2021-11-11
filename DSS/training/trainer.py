@@ -164,9 +164,9 @@ class Trainer(BaseTrainer):
         eval_dict = {'chamfer_point': cd_p.item(), 'chamfer_normal': cd_n.item()}
         self.tb_logger.add_scalars(
             'eval', eval_dict, global_step=it)
-        if not pointcloud.is_empty:
+        if not pointcloud.isempty():
             self.tb_logger.add_mesh('eval',
-                                    np.array(pointcloud.vertices)[None, ...], global_step=it)
+                                    pointcloud.points_padded(), global_step=it)
             # mesh.export(os.path.join(self.val_dir, "%010d.ply" % it))
         return eval_dict
 

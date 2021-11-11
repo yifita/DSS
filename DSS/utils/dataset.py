@@ -121,7 +121,7 @@ class MVRDataset(data.Dataset):
             for i in range(len(meshes)):
                 mesh = meshes[i]
                 m = pymeshlab.Mesh(mesh.verts_packed().cpu().numpy(), mesh.faces_packed().cpu().numpy())
-                breakpoint()
+                # breakpoint()
                 ms = pymeshlab.MeshSet()
                 ms.add_mesh(m, 'mesh0')
                 ms.poisson_disk_sampling(samplenum=num_points, approximategeodesicdistance=True, exactnumflag=True)

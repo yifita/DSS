@@ -195,7 +195,7 @@ while True:
 
         # Run validation and adjust sampling rate
         if it > 0 and validate_every > 0 and (it % validate_every) == 0:
-            if model_selection_metric == 'chamfer':
+            if 'chamfer' in model_selection_metric:
                 eval_dict = trainer.evaluate_3d(
                     val_loader, it, cameras=cameras, lights=lights)
             else:

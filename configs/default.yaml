@@ -65,7 +65,7 @@ training:
   n_debug_points: -1
   resume_from: model.pt
   point_file: shape_pts.ply
-  model_selection_metric: chamfer
+  model_selection_metric: chamfer_point
   model_selection_mode: minimize
 generation:
   batch_size: 1
