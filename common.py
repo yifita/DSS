@@ -1,8 +1,10 @@
 import torch
 import torch.nn.functional as F
 import os
+import math
 import random
 from DSS.misc.visualize import animate_points, animate_mesh, figures_to_html
+from DSS.core.lighting import PointLights, DirectionalLights
 from DSS import logger_py
 
 
@@ -86,20 +88,20 @@ def get_tri_color_lights_for_view(cams, has_specular=False, point_lights=True):
                              specular_color=specular_color, location=location)
     return lights
 
-def get_light_for_view(cams, has_specular):
+def get_light_for_view(cams, point_lights, has_specular):
     # create tri-color lights and a specular+diffuse shader
     ambient_color = torch.FloatTensor((((0.6, 0.6, 0.6),),))
     diffuse_color = torch.FloatTensor(
         (((0.2, 0.2, 0.2),),))
 
-    if opt.has_specular:
+    if has_specular:
         specular_color = 0.15 * diffuse_color
         diffuse_color *= 0.85
     else:
         specular_color = (((0, 0, 0),),)
 
-    elev = torch.FloatTensor(((random.randint(10, 90),),))
-    azim = torch.FloatTensor(((random.randint(0, 360)),))
+    elev = torch.tensor(((random.randint(10, 90),),), dtype=torch.float, device=cams.device)
+    azim = torch.tensor(((random.randint(0, 360)),), dtype=torch.float, device=cams.device)
     elev = math.pi / 180.0 * elev
     azim = math.pi / 180.0 * azim
 
