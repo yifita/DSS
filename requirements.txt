@@ -13,3 +13,5 @@ tqdm
 trimesh==3.6.34
 point_cloud_utils
 pymeshlab
+GitPython
+protobuf==3.20.*

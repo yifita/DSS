@@ -124,7 +124,7 @@ class MVRDataset(data.Dataset):
                 # breakpoint()
                 ms = pymeshlab.MeshSet()
                 ms.add_mesh(m, 'mesh0')
-                ms.poisson_disk_sampling(samplenum=num_points, approximategeodesicdistance=True, exactnumflag=True)
+                ms.generate_sampling_poisson_disk(samplenum=num_points, approximategeodesicdistance=True, exactnumflag=True)
                 m = ms.current_mesh()
                 points = m.vertex_matrix().astype(np.float32)
                 normals = m.vertex_normal_matrix().astype(np.float32)
