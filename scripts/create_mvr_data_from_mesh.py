@@ -103,8 +103,10 @@ if __name__ == "__main__":
 
         # load and normalize mesh
         if os.path.splitext(mesh_path)[1].lower() == ".ply":
-            verts, faces = load_ply(mesh_path)
-            verts_idx = faces
+            import open3d  as o3d
+            mesh = o3d.io.read_triangle_mesh(mesh_path)
+            verts = torch.tensor(mesh.vertices, dtype=torch.float32)
+            verts_idx = torch.tensor(mesh.triangles, dtype=torch.int)
         elif os.path.splitext(mesh_path)[1].lower() == ".obj":
             verts, faces, aux = load_obj(mesh_path)
             verts_idx = faces.verts_idx
