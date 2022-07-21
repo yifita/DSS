@@ -26,7 +26,7 @@ code for paper Differentiable Surface Splatting for Point-based Geometry Process
 
 ## Installation
 
-1. install prequisitories. Our code uses python3.8, pytorch 1.6.1, pytorch3d. the installation instruction requires the latest anaconda.
+1. install prequisitories. Our code uses python 3.8, pytorch 1.6.0, pytorch3d 0.2.5. the installation instruction requires the latest anaconda.
 
 ```bash
 # we tested with cuda 10.2, pytorch 1.6.0, and pytorch 0.2.5
@@ -37,7 +37,7 @@ conda install -c pytorch pytorch=1.6.0 torchvision cudatoolkit=10.2
 conda install -c fvcore -c iopath -c conda-forge fvcore iopath
 conda install -c bottler nvidiacub
 conda install -c pytorch3d pytorch3d=0.2.5
-pip install -f requirements.txt
+pip install -r requirements.txt
 pip install "git+https://github.com/mmolero/pypoisson.git"
 ```
 
