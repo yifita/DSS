@@ -46,6 +46,8 @@ pip install "git+https://github.com/mmolero/pypoisson.git"
 ```bash
 git clone --recursive https://github.com/yifita/DSS.git
 cd DSS
+# if you have cloned it without `--recusive`, you can execute this command under DSS/
+# git submodule update --init --recursive
 # compile external dependencies
 cd external/prefix_sum
 pip install .
