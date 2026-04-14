@@ -6,7 +6,7 @@ imageio==2.8.0
 matplotlib==3.2.1
 plotly==4.7.1
 plyfile==0.7.2
-pytest==6.2.1
+pytest==9.0.3
 scikit-image==0.16.2
 tensorboard==1.15.0
 tqdm
